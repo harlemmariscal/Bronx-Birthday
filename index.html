@@ -714,6 +714,7 @@ let swipeArmed = false;        // one lane-change per touch; lift & swipe again 
 
 webglCanvas.addEventListener('touchstart', e => {
   e.preventDefault();
+  initAudio(); resumeAudio();    // unlock audio on first touch (iOS rule)
   t0x = e.touches[0].clientX; t0y = e.touches[0].clientY;
   swipeArmed = true;
 }, { passive: false });
@@ -760,6 +761,7 @@ function doSwipe(dir) {
   hero.swingFrom = hero.lane; hero.swingTo = next;
   camShake = Math.max(camShake, 0.15);
   floatText('THWIP!', dir === 'left' ? -1 : 1, '#ffe000');
+  sfxThwip();
 }
 
 function updateSwing(dt) {
@@ -777,6 +779,7 @@ function triggerDeath() {
   hero.dead = true;
   state = 'DEAD';
   camShake = 0.7;
+  sfxCrash(); stopBeat();
   floatText('CRASH!', 0, '#ff2200');
   for (let i = 0; i < 30; i++) {
     const a = Math.random() * Math.PI * 2;
@@ -1122,6 +1125,7 @@ function roundRect(x, y, w, h, r) {
 // ── Game state ───────────────────────────────────────────────
 function startGame() {
   state = 'PLAYING';
+  initAudio(); resumeAudio(); startBeat();
   score = 0; speed = 25; playTime = 0; frameN = 0;
   obstacles.forEach(o => scene.remove(o.mesh));
   obstacles = [];
@@ -1152,6 +1156,86 @@ function saveInitials() {
   initialsInput.blur();
   initialsInput.style.pointerEvents = 'none';
   state = 'SCORES';
+}
+
+// ── Audio (Web Audio API — 100% procedural, no files) ────────
+let audioCtx = null, masterGain = null, beatTimer = null, beatStep = 0;
+
+function initAudio() {
+  if (audioCtx) return;
+  try {
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    masterGain = audioCtx.createGain();
+    masterGain.gain.value = 0.5;
+    masterGain.connect(audioCtx.destination);
+  } catch (e) { audioCtx = null; }
+}
+function resumeAudio() {
+  if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
+}
+
+// a pitched blip: slides from freqA to freqB over dur seconds
+function blip(freqA, freqB, dur, type, vol) {
+  if (!audioCtx) return;
+  const t = audioCtx.currentTime;
+  const osc = audioCtx.createOscillator();
+  const g = audioCtx.createGain();
+  osc.type = type || 'triangle';
+  osc.frequency.setValueAtTime(freqA, t);
+  osc.frequency.exponentialRampToValueAtTime(Math.max(1, freqB), t + dur);
+  g.gain.setValueAtTime(vol || 0.3, t);
+  g.gain.exponentialRampToValueAtTime(0.001, t + dur);
+  osc.connect(g); g.connect(masterGain);
+  osc.start(t); osc.stop(t + dur + 0.02);
+}
+
+// a burst of filtered white noise (smacks, hi-hats)
+function noiseBurst(dur, vol, cutoff) {
+  if (!audioCtx) return;
+  const t = audioCtx.currentTime;
+  const n = Math.floor(audioCtx.sampleRate * dur);
+  const buf = audioCtx.createBuffer(1, n, audioCtx.sampleRate);
+  const data = buf.getChannelData(0);
+  for (let i = 0; i < n; i++) data[i] = (Math.random() * 2 - 1) * (1 - i / n);
+  const src = audioCtx.createBufferSource(); src.buffer = buf;
+  const g = audioCtx.createGain();
+  g.gain.setValueAtTime(vol || 0.4, t);
+  g.gain.exponentialRampToValueAtTime(0.001, t + dur);
+  const lp = audioCtx.createBiquadFilter();
+  lp.type = 'lowpass'; lp.frequency.value = cutoff || 1800;
+  src.connect(lp); lp.connect(g); g.connect(masterGain);
+  src.start(t); src.stop(t + dur);
+}
+
+function sfxThwip() {              // web shot on each swing
+  blip(420, 1500, 0.13, 'square', 0.16);
+  blip(950, 1900, 0.09, 'triangle', 0.09);
+}
+function sfxCrash() {              // wipeout
+  noiseBurst(0.4, 0.5, 2400);
+  blip(220, 40, 0.5, 'sawtooth', 0.35);
+}
+
+function startBeat() {            // light looping pulse while playing
+  if (!audioCtx || beatTimer) return;
+  beatStep = 0;
+  beatTimer = setInterval(() => {
+    if (!audioCtx) return;
+    const t = audioCtx.currentTime;
+    const kick = audioCtx.createOscillator();
+    const kg = audioCtx.createGain();
+    kick.frequency.setValueAtTime(150, t);
+    kick.frequency.exponentialRampToValueAtTime(48, t + 0.12);
+    kg.gain.setValueAtTime(0.17, t);
+    kg.gain.exponentialRampToValueAtTime(0.001, t + 0.14);
+    kick.connect(kg); kg.connect(masterGain);
+    kick.start(t); kick.stop(t + 0.16);
+    if (beatStep % 2 === 1) noiseBurst(0.04, 0.05, 8000);   // offbeat hat
+    beatStep++;
+  }, 280);
+}
+function stopBeat() {
+  if (beatTimer) { clearInterval(beatTimer); beatTimer = null; }
 }
 
 // ── Boot ─────────────────────────────────────────────────────
