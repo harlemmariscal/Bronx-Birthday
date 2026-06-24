@@ -706,17 +706,37 @@ function updateObstacles(dt) {
 }
 
 // ── Input ────────────────────────────────────────────────────
+// Lane changes fire the INSTANT a swipe crosses SWIPE_THRESH (on touchmove),
+// not on finger-lift — keeps a fast dodge game feeling responsive.
+const SWIPE_THRESH = 28;       // px of horizontal travel before a swipe counts
 let t0x = 0, t0y = 0;
+let swipeArmed = false;        // one lane-change per touch; lift & swipe again for more
+
 webglCanvas.addEventListener('touchstart', e => {
   e.preventDefault();
   t0x = e.touches[0].clientX; t0y = e.touches[0].clientY;
+  swipeArmed = true;
 }, { passive: false });
+
+webglCanvas.addEventListener('touchmove', e => {
+  e.preventDefault();
+  if (state !== 'PLAYING' || hero.dead || !swipeArmed) return;
+  const dx = e.touches[0].clientX - t0x;
+  if (Math.abs(dx) > SWIPE_THRESH) {
+    doSwipe(dx < 0 ? 'left' : 'right');
+    swipeArmed = false;        // consumed — must lift to swipe again
+  }
+}, { passive: false });
+
 webglCanvas.addEventListener('touchend', e => {
   e.preventDefault();
   const tx = e.changedTouches[0].clientX, ty = e.changedTouches[0].clientY;
   const dx = tx - t0x, dy = ty - t0y;
-  handleInput(tx, ty, dx, dy);
+  // In-game swipes already fired on touchmove; touchend only drives the menus.
+  if (state !== 'PLAYING') handleInput(tx, ty, dx, dy);
+  swipeArmed = false;
 }, { passive: false });
+
 window.addEventListener('keydown', e => {
   if (e.key === 'ArrowLeft')  handleInput(0, 0, -80, 0);
   if (e.key === 'ArrowRight') handleInput(0, 0,  80, 0);
