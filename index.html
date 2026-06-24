@@ -6,6 +6,9 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <title>Web Swing Dash</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Bangers&display=swap" rel="stylesheet">
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     html, body { width: 100vw; height: 100vh; overflow: hidden; background: #000; touch-action: none; }
@@ -52,6 +55,7 @@ function resize() {
   renderer.setSize(W, H, false);
   camera.aspect = W / H; camera.updateProjectionMatrix();
   uiCanvas.width = W; uiCanvas.height = H;
+  buildVignette();
 }
 window.addEventListener('resize', resize);
 
@@ -831,13 +835,72 @@ function drawFloatersUI() {
   floaters.forEach(f => {
     uiCtx.save(); uiCtx.globalAlpha = f.alpha;
     uiCtx.translate(f.x, f.y); uiCtx.rotate(f.rot);
-    uiCtx.font = `bold ${f.size}px "Arial Black", Arial`;
+    uiCtx.font = `bold ${f.size}px "Bangers", "Arial Black", Arial`;
     uiCtx.textAlign = 'center';
     uiCtx.strokeStyle = '#000'; uiCtx.lineWidth = 7;
     uiCtx.strokeText(f.text, 0, 0);
     uiCtx.fillStyle = f.color; uiCtx.fillText(f.text, 0, 0);
     uiCtx.restore();
   });
+}
+
+// ── Comic-book overlay FX (pure 2D, layered over the 3D) ─────
+let halftoneTile = null, vignetteCanvas = null;
+function getHalftone() {
+  if (halftoneTile) return halftoneTile;
+  halftoneTile = document.createElement('canvas');
+  halftoneTile.width = halftoneTile.height = 14;
+  const x = halftoneTile.getContext('2d');
+  x.clearRect(0, 0, 14, 14);
+  x.fillStyle = '#000';
+  x.beginPath(); x.arc(7, 7, 3, 0, Math.PI * 2); x.fill();
+  return halftoneTile;
+}
+// pre-render halftone dots that shade only the screen EDGES (comic depth)
+function buildVignette() {
+  vignetteCanvas = document.createElement('canvas');
+  vignetteCanvas.width = W; vignetteCanvas.height = H;
+  const x = vignetteCanvas.getContext('2d');
+  x.fillStyle = x.createPattern(getHalftone(), 'repeat');
+  x.fillRect(0, 0, W, H);
+  const r = Math.max(W, H) * 0.6;
+  const g = x.createRadialGradient(W/2, H/2, r * 0.4, W/2, H/2, r);
+  g.addColorStop(0, 'rgba(0,0,0,1)');   // erase the middle...
+  g.addColorStop(1, 'rgba(0,0,0,0)');   // ...keep dots near the edge
+  x.globalCompositeOperation = 'destination-out';
+  x.fillStyle = g; x.fillRect(0, 0, W, H);
+}
+function drawComicTexture(alpha) {
+  if (!vignetteCanvas) return;
+  uiCtx.globalAlpha = alpha;
+  uiCtx.drawImage(vignetteCanvas, 0, 0);
+  uiCtx.globalAlpha = 1;
+}
+// radial motion streaks rushing inward — stronger the faster you go
+function drawSpeedLines(strength) {
+  const cx = W / 2, cy = H * 0.5, n = 30;
+  const rOut = Math.max(W, H) * 0.78;
+  uiCtx.save(); uiCtx.lineCap = 'round';
+  for (let i = 0; i < n; i++) {
+    const a = (i / n) * Math.PI * 2 + (i % 2 ? 0.05 : 0);
+    const rIn = rOut * (0.55 - (i % 3) * 0.05) - strength * 60;
+    uiCtx.globalAlpha = (0.06 + 0.22 * strength) * (i % 2 ? 1 : 0.55);
+    uiCtx.strokeStyle = (i % 4 === 0) ? '#000' : '#fff';
+    uiCtx.lineWidth = (i % 3 === 0) ? 3.5 : 1.5;
+    uiCtx.beginPath();
+    uiCtx.moveTo(cx + Math.cos(a) * rOut, cy + Math.sin(a) * rOut);
+    uiCtx.lineTo(cx + Math.cos(a) * rIn,  cy + Math.sin(a) * rIn);
+    uiCtx.stroke();
+  }
+  uiCtx.restore(); uiCtx.globalAlpha = 1;
+}
+// bold black border = comic-panel gutter
+function drawComicFrame() {
+  const lw = Math.max(6, W * 0.013);
+  uiCtx.save();
+  uiCtx.strokeStyle = '#0a0a0a'; uiCtx.lineWidth = lw;
+  uiCtx.strokeRect(lw / 2, lw / 2, W - lw, H - lw);
+  uiCtx.restore();
 }
 
 // ── UI overlay ───────────────────────────────────────────────
@@ -856,7 +919,7 @@ function drawHUD() {
   uiCtx.restore();
 
   uiCtx.textAlign = 'center';
-  uiCtx.font = 'bold 22px "Arial Black", Arial';
+  uiCtx.font = 'bold 22px "Bangers", "Arial Black", Arial';
   uiCtx.fillStyle = '#000';
   uiCtx.fillText(`${Math.floor(score)}m`, 70, 58);
 
@@ -890,13 +953,13 @@ function drawSplashUI() {
   uiCtx.restore();
 
   uiCtx.textAlign = 'center';
-  uiCtx.font = `bold ${Math.min(46, W * 0.075)}px "Arial Black", Arial`;
+  uiCtx.font = `bold ${Math.min(46, W * 0.075)}px "Bangers", "Arial Black", Arial`;
   uiCtx.strokeStyle = '#000'; uiCtx.lineWidth = 5;
   uiCtx.strokeText('HAPPY BIRTHDAY', cx, H * 0.15);
   uiCtx.fillStyle = '#ffe000'; uiCtx.fillText('HAPPY BIRTHDAY', cx, H * 0.15);
 
   const bSize = Math.min(110, W * 0.20);
-  uiCtx.font = `bold ${bSize}px "Arial Black", Arial`;
+  uiCtx.font = `bold ${bSize}px "Bangers", "Arial Black", Arial`;
   uiCtx.lineWidth = 10;
   uiCtx.fillStyle = '#660000';
   uiCtx.fillText('BRONX!', cx + 6, H * 0.30 + 6);
@@ -915,14 +978,14 @@ function drawSplashUI() {
     else uiCtx.lineTo(Math.cos(a) * r, Math.sin(a) * r);
   }
   uiCtx.closePath(); uiCtx.fill(); uiCtx.stroke();
-  uiCtx.font = 'bold 22px "Arial Black", Arial'; uiCtx.fillStyle = '#000';
+  uiCtx.font = 'bold 22px "Bangers", "Arial Black", Arial'; uiCtx.fillStyle = '#000';
   uiCtx.textAlign = 'center';
   uiCtx.fillText('TURNING', 0, -8);
-  uiCtx.font = 'bold 36px "Arial Black", Arial';
+  uiCtx.font = 'bold 36px "Bangers", "Arial Black", Arial';
   uiCtx.fillText('12!', 0, 22);
   uiCtx.restore();
 
-  uiCtx.font = `bold ${Math.min(42, W * 0.08)}px "Arial Black", Arial`;
+  uiCtx.font = `bold ${Math.min(42, W * 0.08)}px "Bangers", "Arial Black", Arial`;
   uiCtx.lineWidth = 5; uiCtx.strokeStyle = '#000';
   uiCtx.textAlign = 'center';
   uiCtx.strokeText('WEB SWING DASH', cx, H * 0.92);
@@ -952,13 +1015,13 @@ function drawGameOverUI() {
   uiCtx.closePath();
   uiCtx.fillStyle = '#ffe000'; uiCtx.fill();
   uiCtx.strokeStyle = '#000'; uiCtx.lineWidth = 5; uiCtx.stroke();
-  uiCtx.font = 'bold 76px "Arial Black", Arial';
+  uiCtx.font = 'bold 76px "Bangers", "Arial Black", Arial';
   uiCtx.fillStyle = '#cc0000'; uiCtx.strokeStyle = '#000'; uiCtx.lineWidth = 7;
   uiCtx.textAlign = 'center';
   uiCtx.strokeText('WHAM!', 0, 24); uiCtx.fillText('WHAM!', 0, 24);
   uiCtx.restore();
 
-  uiCtx.font = `bold ${Math.min(46, W * 0.085)}px "Arial Black", Arial`;
+  uiCtx.font = `bold ${Math.min(46, W * 0.085)}px "Bangers", "Arial Black", Arial`;
   uiCtx.fillStyle = '#fff'; uiCtx.strokeStyle = '#000'; uiCtx.lineWidth = 5;
   uiCtx.textAlign = 'center';
   uiCtx.strokeText('GAME OVER', cx, H * 0.58);
@@ -994,7 +1057,7 @@ function drawInitialsUI() {
   uiCtx.fillStyle = 'rgba(0,0,0,0.55)'; uiCtx.fillRect(0, 0, W, H);
   const cx = W / 2;
   uiCtx.textAlign = 'center';
-  uiCtx.font = `bold ${Math.min(34, W * 0.06)}px "Arial Black", Arial`;
+  uiCtx.font = `bold ${Math.min(34, W * 0.06)}px "Bangers", "Arial Black", Arial`;
   uiCtx.strokeStyle = '#000'; uiCtx.lineWidth = 4;
   uiCtx.strokeText('NEW HIGH SCORE!', cx, H * 0.09);
   uiCtx.fillStyle = '#ffe000'; uiCtx.fillText('NEW HIGH SCORE!', cx, H * 0.09);
@@ -1026,7 +1089,7 @@ function drawInitialsUI() {
     uiCtx.strokeStyle = hasLetter ? '#ffe000' : isCursor ? '#ffe000' : '#664488';
     uiCtx.lineWidth = isCursor ? 4 : 3;
     roundRect(bx, boxY, boxW, boxH, 12); uiCtx.fill(); uiCtx.stroke();
-    uiCtx.font = `bold ${Math.min(60, boxW * 0.78)}px "Arial Black", Arial`;
+    uiCtx.font = `bold ${Math.min(60, boxW * 0.78)}px "Bangers", "Arial Black", Arial`;
     if (hasLetter) {
       uiCtx.fillStyle = '#ffe000'; uiCtx.strokeStyle = '#000'; uiCtx.lineWidth = 3;
       uiCtx.strokeText(typed[i], bx + boxW/2, boxY + boxH * 0.72);
@@ -1044,7 +1107,7 @@ function drawInitialsUI() {
   uiCtx.strokeStyle = ready ? '#44ff44' : '#666688';
   uiCtx.lineWidth = 3;
   roundRect(btnX, btnY, btnW, btnH, 14); uiCtx.fill(); uiCtx.stroke();
-  uiCtx.font = `bold ${Math.min(28, W * 0.052)}px "Arial Black", Arial`;
+  uiCtx.font = `bold ${Math.min(28, W * 0.052)}px "Bangers", "Arial Black", Arial`;
   uiCtx.fillStyle = ready ? '#aaffaa' : '#888899';
   uiCtx.strokeStyle = '#000'; uiCtx.lineWidth = 3;
   const label = ready ? 'SAVE  ✓' : 'TYPE TO START';
@@ -1070,7 +1133,7 @@ function drawScoresUI() {
   uiCtx.closePath();
   uiCtx.fillStyle = '#ffe000'; uiCtx.fill();
   uiCtx.strokeStyle = '#000'; uiCtx.lineWidth = 4; uiCtx.stroke();
-  uiCtx.font = `bold ${Math.min(34, W * 0.062)}px "Arial Black", Arial`;
+  uiCtx.font = `bold ${Math.min(34, W * 0.062)}px "Bangers", "Arial Black", Arial`;
   uiCtx.fillStyle = '#cc0000'; uiCtx.strokeStyle = '#000'; uiCtx.lineWidth = 4;
   uiCtx.strokeText('HIGH SCORES', 0, 12);
   uiCtx.fillText('HIGH SCORES', 0, 12);
@@ -1086,7 +1149,7 @@ function drawScoresUI() {
     uiCtx.fillStyle = `rgba(140,80,200,0.25)`;
     roundRect(cx - W * 0.28, ry - rowH * 0.5, barW, rowH * 0.78, 4); uiCtx.fill();
 
-    uiCtx.font = `bold ${Math.min(26, W * 0.05)}px "Arial Black", Arial`;
+    uiCtx.font = `bold ${Math.min(26, W * 0.05)}px "Bangers", "Arial Black", Arial`;
     uiCtx.strokeStyle = '#000'; uiCtx.lineWidth = 3;
     uiCtx.textAlign = 'right'; uiCtx.fillStyle = rankColors[i];
     uiCtx.strokeText(`${i + 1}`, cx * 0.42, ry);
@@ -1247,6 +1310,9 @@ populateCars();
 heroGroup = makeSpiderHero();
 scene.add(heroGroup);
 makeWeb();
+if (document.fonts && document.fonts.load) {   // kick off comic font load early
+  document.fonts.load('40px "Bangers"').catch(() => {});
+}
 
 // ── Main loop ────────────────────────────────────────────────
 function loop(ts) {
@@ -1284,8 +1350,13 @@ function loop(ts) {
 
   uiCtx.clearRect(0, 0, W, H);
   if (state === 'SPLASH') {
+    drawComicTexture(0.5);
     drawSplashUI();
   } else if (state === 'PLAYING' || state === 'DEAD') {
+    const rush = Math.max(0, Math.min(1, (speed - 25) / 35));
+    drawSpeedLines(rush);
+    drawComicTexture(0.5);
+    drawComicFrame();
     drawHUD();
     drawFloatersUI();
     if (state === 'DEAD') drawGameOverUI();
