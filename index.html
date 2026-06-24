@@ -500,7 +500,7 @@ function makeWeb() {
 }
 
 // ── Obstacles in lanes ───────────────────────────────────────
-const OBSTACLE_TYPES = ['scaffold', 'sign', 'cranebar', 'truck'];
+const OBSTACLE_TYPES = ['scaffold', 'sign', 'cranebar', 'truck', 'bomb', 'vulture'];
 
 function spawnObstacle() {
   const lane = Math.floor(Math.random() * 3);
@@ -509,7 +509,9 @@ function spawnObstacle() {
   if (type === 'scaffold') mesh = makeScaffold();
   else if (type === 'sign') mesh = makeHangingSign();
   else if (type === 'cranebar') mesh = makeCraneBar();
-  else mesh = makeTruck();
+  else if (type === 'truck') mesh = makeTruck();
+  else if (type === 'bomb') mesh = makeGoblinBomb();
+  else mesh = makeVulture();
   mesh.position.set(LANE_X[lane], 0, SPAWN_Z);
   scene.add(mesh);
   obstacles.push({ mesh, lane, type, hit: false });
@@ -615,6 +617,72 @@ function makeTruck() {
       w.position.set(wx, 0.5, wz);
       g.add(w);
     }
+  }
+  return g;
+}
+
+// ── Villains (reskinned lane hazards — look scary, play lane-based) ──
+function makeGoblinBomb() {
+  const g = new THREE.Group();
+  const inner = new THREE.Group();
+  inner.position.y = 2.2;                 // floats at chest/head height in the lane
+  g.add(inner);
+  const body = new THREE.Mesh(
+    new THREE.SphereGeometry(1.1, 16, 12),
+    new THREE.MeshStandardMaterial({ color: 0xff7a1a, roughness: 0.55, emissive: 0x662200, emissiveIntensity: 0.4 })
+  );
+  body.scale.set(1, 0.85, 1);            // squashed = pumpkin
+  inner.add(body);
+  const stem = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.12, 0.22, 0.5, 6),
+    new THREE.MeshStandardMaterial({ color: 0x2f7d2f })
+  );
+  stem.position.y = 1.0;
+  inner.add(stem);
+  const spark = new THREE.Mesh(           // glowing fuse
+    new THREE.SphereGeometry(0.18, 8, 8),
+    new THREE.MeshBasicMaterial({ color: 0xffe066 })
+  );
+  spark.position.y = 1.35;
+  inner.add(spark);
+  const eyeMat = new THREE.MeshStandardMaterial({ color: 0x140a00, emissive: 0xff5500, emissiveIntensity: 0.7 });
+  for (const ex of [-0.42, 0.42]) {       // mean jack-o'-lantern eyes
+    const eye = new THREE.Mesh(new THREE.SphereGeometry(0.2, 8, 8), eyeMat);
+    eye.position.set(ex, 0.15, 0.9);
+    eye.scale.set(1, 0.7, 0.5);
+    inner.add(eye);
+  }
+  return g;
+}
+
+function makeVulture() {
+  const g = new THREE.Group();
+  const inner = new THREE.Group();
+  inner.position.y = 3.2;                 // swooping at head height
+  g.add(inner);
+  const suit = new THREE.MeshStandardMaterial({ color: 0x3b6b3b, roughness: 0.7, metalness: 0.2 });
+  const dark = new THREE.MeshStandardMaterial({ color: 0x223018, roughness: 0.8 });
+  const body = new THREE.Mesh(new THREE.CapsuleGeometry(0.55, 1.0, 6, 10), suit);
+  body.rotation.x = Math.PI / 2;          // lean into a dive
+  inner.add(body);
+  const head = new THREE.Mesh(new THREE.SphereGeometry(0.42, 12, 12), dark);
+  head.position.set(0, 0.18, 0.95);
+  inner.add(head);
+  for (const s of [-1, 1]) {              // big spread wings
+    const wing = new THREE.Mesh(new THREE.BoxGeometry(2.4, 0.16, 1.5), dark);
+    wing.position.set(s * 1.55, 0.25, -0.1);
+    wing.rotation.z = s * 0.22;
+    inner.add(wing);
+    const tip = new THREE.Mesh(new THREE.BoxGeometry(1.0, 0.13, 0.7), suit);
+    tip.position.set(s * 2.9, 0.5, -0.3);
+    tip.rotation.z = s * 0.5;
+    inner.add(tip);
+  }
+  const eyeMat = new THREE.MeshBasicMaterial({ color: 0x9bff4d });
+  for (const ex of [-0.16, 0.16]) {       // glowing eyes
+    const eye = new THREE.Mesh(new THREE.SphereGeometry(0.09, 6, 6), eyeMat);
+    eye.position.set(ex, 0.26, 1.28);
+    inner.add(eye);
   }
   return g;
 }
