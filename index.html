@@ -75,7 +75,7 @@ scene.add(new THREE.HemisphereLight(0xc8d8e8, 0x554433, 0.55));
 // ── Constants ─────────────────────────────────────────────────
 const LANE_X     = [-7, 0, 7];
 const LANE_TILT  = [0.06, 0, -0.06];
-const SPAWN_Z    = -800;
+const SPAWN_Z    = -130;   // ~5s travel at start speed (was -800 = ~32s, way too long)
 const HIT_Z      = -8;
 const SWING_MS   = 380;
 const STREET_W   = 24;
@@ -1265,6 +1265,7 @@ function startGame() {
   floaters = [];
   pendingSwipe = null; camShake = 0; runDist = 0; camTilt = 0; camCurrentX = 0;
   Object.assign(hero, { lane:1, swinging:false, swingFrom:1, swingTo:1, swingT:0, dead:false, deadT:0 });
+  spawnObstacle();   // seed the first hazard so action starts ~5s in, not 30s
   initialsInput.blur();
   initialsInput.style.pointerEvents = 'none';
 }
