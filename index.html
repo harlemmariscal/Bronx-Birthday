@@ -749,28 +749,49 @@ function makeCraneBar() {
 
 function makeTruck() {
   const g = new THREE.Group();
-  const bodyColor = Math.random() < 0.5 ? 0xee2233 : 0x335cdd;
-  const body = new THREE.Mesh(
-    new THREE.BoxGeometry(3.6, 3.2, 7),
-    new THREE.MeshStandardMaterial({ color: bodyColor, metalness: 0.4 })
-  );
-  body.position.y = 2;
-  g.add(body);
-  const winMat = new THREE.MeshStandardMaterial({ color: 0x88ccff, metalness: 0.8, roughness: 0.2 });
-  const windowsTop = new THREE.Mesh(new THREE.BoxGeometry(3.4, 0.9, 6.6), winMat);
-  windowsTop.position.y = 3;
-  g.add(windowsTop);
-  const windowsBot = new THREE.Mesh(new THREE.BoxGeometry(3.4, 0.7, 6.6), winMat);
-  windowsBot.position.y = 1.5;
-  g.add(windowsBot);
-  const wheelMat = new THREE.MeshStandardMaterial({ color: 0x0e0e14 });
-  for (const wx of [-1.6, 1.6]) {
-    for (const wz of [-2.5, 2.5]) {
-      const w = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.5, 0.4, 10), wheelMat);
-      w.rotation.z = Math.PI / 2;
-      w.position.set(wx, 0.5, wz);
-      g.add(w);
-    }
+  const palette = [0xee2233, 0x2f6fe0, 0x2ec27e, 0xff8c1a, 0xb23bd6];
+  const color = palette[Math.floor(Math.random() * palette.length)];
+  const cabMat   = new THREE.MeshStandardMaterial({ color, metalness: 0.35, roughness: 0.4 });
+  const boxMat   = new THREE.MeshStandardMaterial({ color: 0xeef0f3, roughness: 0.6 });   // white cargo box
+  const glassMat = new THREE.MeshStandardMaterial({ color: 0x8fd3ff, metalness: 0.6, roughness: 0.12,
+                                                    emissive: 0x113355, emissiveIntensity: 0.25 });
+
+  // cargo box (rear, -z) with a colored accent stripe
+  const box = new THREE.Mesh(new THREE.BoxGeometry(3.4, 3.0, 4.6), boxMat);
+  box.position.set(0, 2.1, -1.3); g.add(box);
+  const stripe = new THREE.Mesh(new THREE.BoxGeometry(3.44, 0.7, 4.64), cabMat);
+  stripe.position.set(0, 1.55, -1.3); g.add(stripe);
+
+  // cab (front, +z) + windshield + side windows
+  const cab = new THREE.Mesh(new THREE.BoxGeometry(3.3, 2.0, 2.0), cabMat);
+  cab.position.set(0, 1.5, 2.0); g.add(cab);
+  const wind = new THREE.Mesh(new THREE.BoxGeometry(3.0, 0.85, 0.16), glassMat);
+  wind.position.set(0, 2.0, 3.02); g.add(wind);
+  for (const sx of [-1.66, 1.66]) {
+    const sw = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.75, 1.3), glassMat);
+    sw.position.set(sx, 2.0, 2.1); g.add(sw);
+  }
+
+  // lights
+  const hlMat = new THREE.MeshStandardMaterial({ color: 0xfff3c0, emissive: 0xffe070, emissiveIntensity: 0.8 });
+  const tlMat = new THREE.MeshStandardMaterial({ color: 0xff3b3b, emissive: 0xff2020, emissiveIntensity: 0.7 });
+  for (const hx of [-1.1, 1.1]) {
+    const hl = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.3, 0.1), hlMat);
+    hl.position.set(hx, 0.9, 3.05); g.add(hl);
+  }
+  for (const tx of [-1.4, 1.4]) {
+    const tl = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.4, 0.1), tlMat);
+    tl.position.set(tx, 1.1, -3.62); g.add(tl);
+  }
+
+  // 6 wheels with hubcaps
+  const tireMat = new THREE.MeshStandardMaterial({ color: 0x0e0e12, roughness: 0.85 });
+  const hubMat  = new THREE.MeshStandardMaterial({ color: 0xcccccc, metalness: 0.7, roughness: 0.3 });
+  for (const wx of [-1.72, 1.72]) for (const wz of [-2.6, -0.6, 2.0]) {
+    const tire = new THREE.Mesh(new THREE.CylinderGeometry(0.55, 0.55, 0.42, 14), tireMat);
+    tire.rotation.z = Math.PI / 2; tire.position.set(wx, 0.55, wz); g.add(tire);
+    const hub = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.2, 0.44, 10), hubMat);
+    hub.rotation.z = Math.PI / 2; hub.position.set(wx, 0.55, wz); g.add(hub);
   }
   return g;
 }
@@ -1698,9 +1719,9 @@ function loop(ts) {
   uiCtx.font = 'bold 18px monospace';
   uiCtx.textAlign = 'right';
   uiCtx.lineWidth = 4; uiCtx.strokeStyle = '#000';
-  uiCtx.strokeText('BUILD 19 ✅', W - 12, H - 14);
+  uiCtx.strokeText('BUILD 20 ✅', W - 12, H - 14);
   uiCtx.fillStyle = '#00ff88';
-  uiCtx.fillText('BUILD 19 ✅', W - 12, H - 14);
+  uiCtx.fillText('BUILD 20 ✅', W - 12, H - 14);
   uiCtx.restore();
 
   requestAnimationFrame(loop);
