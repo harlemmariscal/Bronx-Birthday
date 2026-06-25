@@ -689,7 +689,7 @@ function makeVulture() {
 
 // ── Camera ───────────────────────────────────────────────────
 const CAM_BASE = new THREE.Vector3(0, 7.5, 7);
-const CAM_LOOK = new THREE.Vector3(0, 5, -20);
+const CAM_LOOK = new THREE.Vector3(0, 2, -20);   // look further down so the road fills more of the screen
 let camCurrentX = 0;
 
 function updateCamera(dt) {
@@ -1341,7 +1341,7 @@ function noiseBurst(dur, vol, cutoff) {
 
 function sfxThwip() {              // web shot on each swing — soft & subtle
   blip(600, 1350, 0.08, 'sine', 0.055);
-  blip(1000, 1650, 0.05, 'triangle', 0.03);
+  blip(1050, 1400, 0.04, 'triangle', 0.25);
 }
 function sfxCrash() {              // wipeout
   noiseBurst(0.4, 0.5, 2400);
