@@ -76,7 +76,11 @@ scene.add(new THREE.HemisphereLight(0xc8d8e8, 0x554433, 0.55));
 const LANE_X     = [-7, 0, 7];
 const LANE_TILT  = [0.06, 0, -0.06];
 const SPAWN_Z    = -130;   // ~5s travel at start speed (was -800 = ~32s, way too long)
-const HIT_Z      = -8;
+const HIT_Z      = -8;      // (still used for the generous coin-pickup window)
+// obstacle death box, centered on the hero (z=0). Smaller = must be closer to die.
+// Keep the span (FAR-NEAR) > ~3 so fast obstacles can't tunnel through it in one frame.
+const OBS_HIT_NEAR = -1.5;  // how close ahead (z) before it kills — was effectively -8
+const OBS_HIT_FAR  =  2.5;
 const SWING_MS   = 380;
 const STREET_W   = 24;
 const BUILDING_GAP = 38;
@@ -892,7 +896,7 @@ function updateObstacles(dt) {
   for (const o of obstacles) {
     o.mesh.position.z += speed * dt;
     if (!o.hit && !hero.dead) {
-      if (o.mesh.position.z > HIT_Z && o.mesh.position.z < HIT_Z + 6 && o.lane === hero.lane) {
+      if (o.mesh.position.z > OBS_HIT_NEAR && o.mesh.position.z < OBS_HIT_FAR && o.lane === hero.lane) {
         o.hit = true; triggerDeath();
       }
     }
@@ -1642,9 +1646,9 @@ function loop(ts) {
   uiCtx.font = 'bold 18px monospace';
   uiCtx.textAlign = 'right';
   uiCtx.lineWidth = 4; uiCtx.strokeStyle = '#000';
-  uiCtx.strokeText('BUILD 16 ✅', W - 12, H - 14);
+  uiCtx.strokeText('BUILD 17 ✅', W - 12, H - 14);
   uiCtx.fillStyle = '#00ff88';
-  uiCtx.fillText('BUILD 16 ✅', W - 12, H - 14);
+  uiCtx.fillText('BUILD 17 ✅', W - 12, H - 14);
   uiCtx.restore();
 
   requestAnimationFrame(loop);
