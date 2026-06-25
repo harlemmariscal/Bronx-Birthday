@@ -1869,7 +1869,7 @@ function loop(ts) {
     playTime += dt;
     runDist  += speed * dt;
     score    += speed * dt * 0.5;
-    speed     = Math.min(60, 25 + Math.floor(playTime / 20) * 3);
+    speed     = Math.min(62, 25 + playTime * 0.3);   // smooth, gradual ramp (slightly quicker than before)
 
     const interval = Math.max(36, 90 - Math.floor(playTime / 18) * 8);
     if (frameN % interval === 0) spawnObstacle();
@@ -1920,16 +1920,6 @@ function loop(ts) {
   } else if (state === 'ART') {
     drawArtUI();
   }
-
-  // TEMP build marker — proves you're seeing the latest code. Remove later.
-  uiCtx.save();
-  uiCtx.font = 'bold 18px monospace';
-  uiCtx.textAlign = 'right';
-  uiCtx.lineWidth = 4; uiCtx.strokeStyle = '#000';
-  uiCtx.strokeText('BUILD 23 ✅', W - 12, H - 14);
-  uiCtx.fillStyle = '#00ff88';
-  uiCtx.fillText('BUILD 23 ✅', W - 12, H - 14);
-  uiCtx.restore();
 
   requestAnimationFrame(loop);
 }
