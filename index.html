@@ -203,7 +203,7 @@ function buildStreet() {
   }
 
   const dashMat = new THREE.MeshStandardMaterial({ color: 0xfddc4f, emissive: 0x554014 });
-  for (let z = -50; z > -2000; z -= 8) {
+  for (let z = 20; z > -2000; z -= 8) {   // start dashes right behind the hero so the road reads all the way down
     const dash = new THREE.Mesh(new THREE.PlaneGeometry(0.4, 4), dashMat);
     dash.rotation.x = -Math.PI / 2;
     dash.position.set(0, 0.06, z);
@@ -212,7 +212,7 @@ function buildStreet() {
 
   const laneMat = new THREE.MeshStandardMaterial({ color: 0xeeeeee, transparent:true, opacity:0.45 });
   for (const lx of [-STREET_W/4, STREET_W/4]) {
-    for (let z = -50; z > -2000; z -= 12) {
+    for (let z = 20; z > -2000; z -= 12) {   // lane lines all the way to the front too
       const dash = new THREE.Mesh(new THREE.PlaneGeometry(0.3, 5), laneMat);
       dash.rotation.x = -Math.PI / 2;
       dash.position.set(lx, 0.06, z);
@@ -689,7 +689,7 @@ function makeVulture() {
 
 // ── Camera ───────────────────────────────────────────────────
 const CAM_BASE = new THREE.Vector3(0, 7.5, 7);
-const CAM_LOOK = new THREE.Vector3(0, 2, -20);   // look further down so the road fills more of the screen
+const CAM_LOOK = new THREE.Vector3(0, 2, -20);   // back to the previous angle
 let camCurrentX = 0;
 
 function updateCamera(dt) {
@@ -1433,6 +1433,16 @@ function loop(ts) {
   } else if (state === 'SCORES') {
     drawScoresUI();
   }
+
+  // TEMP build marker — proves you're seeing the latest code. Remove later.
+  uiCtx.save();
+  uiCtx.font = 'bold 18px monospace';
+  uiCtx.textAlign = 'right';
+  uiCtx.lineWidth = 4; uiCtx.strokeStyle = '#000';
+  uiCtx.strokeText('BUILD 10 ✅', W - 12, H - 14);
+  uiCtx.fillStyle = '#00ff88';
+  uiCtx.fillText('BUILD 10 ✅', W - 12, H - 14);
+  uiCtx.restore();
 
   requestAnimationFrame(loop);
 }
