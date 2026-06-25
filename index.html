@@ -1275,24 +1275,41 @@ function _mask(c, x, y, r) {
 function drawSpiderPose(c, cx, cy, s, P) {
   const X = j => cx + j[0] * s, Y = j => cy + j[1] * s;
   const RED = '#d12626', BLUE = '#1d49b8', GLOVE = '#9c1414';
-  const armW = s * 0.16, legW = s * 0.2, torsoW = s * 0.42;
+  const armW = s * 0.15, legW = s * 0.2;
+  const tcx = (X(P.shL) + X(P.shR) + X(P.hipL) + X(P.hipR)) / 4;   // torso center
+  const tcy = (Y(P.shL) + Y(P.shR) + Y(P.hipL) + Y(P.hipR)) / 4;
+
+  // legs (blue) behind
   _limb(c, X(P.hipL), Y(P.hipL), X(P.kneeL), Y(P.kneeL), legW, BLUE);
   _limb(c, X(P.kneeL), Y(P.kneeL), X(P.footL), Y(P.footL), legW * 0.9, BLUE);
   _limb(c, X(P.hipR), Y(P.hipR), X(P.kneeR), Y(P.kneeR), legW, BLUE);
   _limb(c, X(P.kneeR), Y(P.kneeR), X(P.footR), Y(P.footR), legW * 0.9, BLUE);
   _blob(c, X(P.footL), Y(P.footL), s * 0.13, GLOVE);
   _blob(c, X(P.footR), Y(P.footR), s * 0.13, GLOVE);
-  _limb(c, X(P.chest), Y(P.chest), X(P.hip), Y(P.hip), torsoW, RED);
+
+  // neck + filled tapered torso (broad shoulders -> narrower hips)
+  _limb(c, X(P.head), Y(P.head), tcx, tcy, s * 0.17, RED);
+  c.beginPath();
+  c.moveTo(X(P.shL), Y(P.shL)); c.lineTo(X(P.shR), Y(P.shR));
+  c.lineTo(X(P.hipR), Y(P.hipR)); c.lineTo(X(P.hipL), Y(P.hipL));
+  c.closePath(); c.lineJoin = 'round';
+  c.fillStyle = RED; c.fill();
+  c.lineWidth = s * 0.1; c.strokeStyle = '#0a0a0a'; c.stroke();
+  c.strokeStyle = 'rgba(0,0,0,0.18)'; c.lineWidth = Math.max(1, s * 0.02);   // web shading
+  c.beginPath();
+  c.moveTo((X(P.shL) + X(P.shR)) / 2, (Y(P.shL) + Y(P.shR)) / 2);
+  c.lineTo((X(P.hipL) + X(P.hipR)) / 2, (Y(P.hipL) + Y(P.hipR)) / 2); c.stroke();
+
+  // arms (red) over the torso
   _limb(c, X(P.shL), Y(P.shL), X(P.elL), Y(P.elL), armW, RED);
   _limb(c, X(P.elL), Y(P.elL), X(P.haL), Y(P.haL), armW * 0.9, RED);
   _limb(c, X(P.shR), Y(P.shR), X(P.elR), Y(P.elR), armW, RED);
   _limb(c, X(P.elR), Y(P.elR), X(P.haR), Y(P.haR), armW * 0.9, RED);
   _blob(c, X(P.haL), Y(P.haL), s * 0.1, GLOVE);
   _blob(c, X(P.haR), Y(P.haR), s * 0.1, GLOVE);
-  const mx = cx + ((P.chest[0] + P.hip[0]) / 2) * s;
-  const my = cy + ((P.chest[1] + P.hip[1]) / 2) * s;
-  c.fillStyle = '#0a0a0a';
-  c.beginPath(); c.ellipse(mx, my, s * 0.05, s * 0.1, 0, 0, Math.PI * 2); c.fill();
+
+  c.fillStyle = '#0a0a0a';                                          // chest spider emblem
+  c.beginPath(); c.ellipse(tcx, tcy, s * 0.05, s * 0.1, 0, 0, Math.PI * 2); c.fill();
   _mask(c, X(P.head), Y(P.head), s * 0.2);
 }
 const POSES = [
@@ -1373,7 +1390,7 @@ function drawSplashUI() {
   for (let i = 0; i < 16; i++) { const a = (i / 16) * Math.PI * 2, r = i % 2 === 0 ? 56 : 40; if (i === 0) uiCtx.moveTo(Math.cos(a) * r, Math.sin(a) * r); else uiCtx.lineTo(Math.cos(a) * r, Math.sin(a) * r); }
   uiCtx.closePath(); uiCtx.fill(); uiCtx.stroke();
   uiCtx.fillStyle = '#000'; uiCtx.font = 'bold 20px "Bangers", "Arial Black", Arial';
-  uiCtx.fillText('TURNING', 0, -6); uiCtx.font = 'bold 32px "Bangers", "Arial Black", Arial'; uiCtx.fillText('12!', 0, 22);
+  uiCtx.fillText('FROM HARLEM', 0, -6); uiCtx.font = 'bold 32px "Bangers", "Arial Black", Arial'; uiCtx.fillText('12th BIRTHDAY!', 0, 22);
   uiCtx.restore();
 
   drawSpiderPose(uiCtx, cx, H * 0.46, Math.min(W * 0.12, 78), POSES[5]);   // mascot
@@ -1863,9 +1880,9 @@ function loop(ts) {
   uiCtx.font = 'bold 18px monospace';
   uiCtx.textAlign = 'right';
   uiCtx.lineWidth = 4; uiCtx.strokeStyle = '#000';
-  uiCtx.strokeText('BUILD 21 ✅', W - 12, H - 14);
+  uiCtx.strokeText('BUILD 22 ✅', W - 12, H - 14);
   uiCtx.fillStyle = '#00ff88';
-  uiCtx.fillText('BUILD 21 ✅', W - 12, H - 14);
+  uiCtx.fillText('BUILD 22 ✅', W - 12, H - 14);
   uiCtx.restore();
 
   requestAnimationFrame(loop);
