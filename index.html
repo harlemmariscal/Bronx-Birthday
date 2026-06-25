@@ -1255,19 +1255,53 @@ function _blob(c, x, y, r, fill) {
   c.fillStyle = fill; c.fill();
   c.lineWidth = Math.max(3, r * 0.5); c.strokeStyle = '#0a0a0a'; c.stroke();
 }
+// spider-web net (spokes + concentric rings) radiating from (ox,oy) — clip first
+function _webNet(c, ox, oy, R, rings, spokes) {
+  c.strokeStyle = 'rgba(0,0,0,0.5)'; c.lineWidth = Math.max(0.8, R * 0.022);
+  for (let i = 0; i < spokes; i++) {
+    const a = (i / spokes) * Math.PI * 2;
+    c.beginPath(); c.moveTo(ox, oy); c.lineTo(ox + Math.cos(a) * R, oy + Math.sin(a) * R); c.stroke();
+  }
+  for (let r = 1; r <= rings; r++) {
+    const rr = R * (r / rings);
+    c.beginPath();
+    for (let i = 0; i <= spokes; i++) {
+      const a = (i / spokes) * Math.PI * 2;
+      const x = ox + Math.cos(a) * rr, y = oy + Math.sin(a) * rr;
+      if (i === 0) c.moveTo(x, y); else c.lineTo(x, y);
+    }
+    c.closePath(); c.stroke();
+  }
+}
+// web hatching along a limb (a center line + rungs across it)
+function _limbWeb(c, ax, ay, bx, by, w) {
+  const dx = bx - ax, dy = by - ay, len = Math.hypot(dx, dy);
+  if (len < 2) return;
+  const px = -dy / len, py = dx / len;
+  c.strokeStyle = 'rgba(0,0,0,0.38)'; c.lineWidth = Math.max(0.7, w * 0.08);
+  c.beginPath(); c.moveTo(ax, ay); c.lineTo(bx, by); c.stroke();
+  const n = Math.max(2, Math.floor(len / (w * 0.85)));
+  for (let i = 1; i < n; i++) {
+    const t = i / n, x = ax + dx * t, y = ay + dy * t;
+    c.beginPath();
+    c.moveTo(x - px * w * 0.45, y - py * w * 0.45);
+    c.lineTo(x + px * w * 0.45, y + py * w * 0.45); c.stroke();
+  }
+}
 function _mask(c, x, y, r) {
   c.save(); c.translate(x, y);
+  c.save();
   c.beginPath(); c.arc(0, 0, r, 0, Math.PI * 2);
   c.fillStyle = '#d12626'; c.fill();
   c.lineWidth = Math.max(3, r * 0.16); c.strokeStyle = '#0a0a0a'; c.stroke();
-  c.strokeStyle = 'rgba(0,0,0,0.25)'; c.lineWidth = Math.max(1, r * 0.05);
-  c.beginPath(); c.moveTo(0, -r); c.lineTo(0, r); c.stroke();
-  c.beginPath(); c.arc(0, 0, r * 0.6, 0.15 * Math.PI, 0.85 * Math.PI); c.stroke();
-  for (const s of [-1, 1]) {                         // white spider eyes
-    c.save(); c.translate(s * r * 0.4, -r * 0.05); c.rotate(s * 0.5);
-    c.beginPath(); c.ellipse(0, 0, r * 0.44, r * 0.26, 0, 0, Math.PI * 2);
+  c.clip();
+  _webNet(c, 0, -r * 0.25, r * 1.5, 3, 9);           // spider-web mask pattern
+  c.restore();
+  for (const s of [-1, 1]) {                          // big bordered spider eyes
+    c.save(); c.translate(s * r * 0.4, -r * 0.02); c.rotate(s * 0.55);
+    c.beginPath(); c.ellipse(0, 0, r * 0.5, r * 0.3, 0, 0, Math.PI * 2);
     c.fillStyle = '#fff'; c.fill();
-    c.lineWidth = Math.max(2, r * 0.1); c.strokeStyle = '#0a0a0a'; c.stroke();
+    c.lineWidth = Math.max(3, r * 0.14); c.strokeStyle = '#0a0a0a'; c.stroke();
     c.restore();
   }
   c.restore();
@@ -1279,37 +1313,48 @@ function drawSpiderPose(c, cx, cy, s, P) {
   const tcx = (X(P.shL) + X(P.shR) + X(P.hipL) + X(P.hipR)) / 4;   // torso center
   const tcy = (Y(P.shL) + Y(P.shR) + Y(P.hipL) + Y(P.hipR)) / 4;
 
-  // legs (blue) behind
+  // legs (blue) behind + web hatching
   _limb(c, X(P.hipL), Y(P.hipL), X(P.kneeL), Y(P.kneeL), legW, BLUE);
   _limb(c, X(P.kneeL), Y(P.kneeL), X(P.footL), Y(P.footL), legW * 0.9, BLUE);
   _limb(c, X(P.hipR), Y(P.hipR), X(P.kneeR), Y(P.kneeR), legW, BLUE);
   _limb(c, X(P.kneeR), Y(P.kneeR), X(P.footR), Y(P.footR), legW * 0.9, BLUE);
+  _limbWeb(c, X(P.hipL), Y(P.hipL), X(P.kneeL), Y(P.kneeL), legW);
+  _limbWeb(c, X(P.kneeL), Y(P.kneeL), X(P.footL), Y(P.footL), legW * 0.9);
+  _limbWeb(c, X(P.hipR), Y(P.hipR), X(P.kneeR), Y(P.kneeR), legW);
+  _limbWeb(c, X(P.kneeR), Y(P.kneeR), X(P.footR), Y(P.footR), legW * 0.9);
   _blob(c, X(P.footL), Y(P.footL), s * 0.13, GLOVE);
   _blob(c, X(P.footR), Y(P.footR), s * 0.13, GLOVE);
 
-  // neck + filled tapered torso (broad shoulders -> narrower hips)
+  // neck + filled tapered torso with a clipped web net
   _limb(c, X(P.head), Y(P.head), tcx, tcy, s * 0.17, RED);
+  c.save();
   c.beginPath();
   c.moveTo(X(P.shL), Y(P.shL)); c.lineTo(X(P.shR), Y(P.shR));
   c.lineTo(X(P.hipR), Y(P.hipR)); c.lineTo(X(P.hipL), Y(P.hipL));
   c.closePath(); c.lineJoin = 'round';
   c.fillStyle = RED; c.fill();
   c.lineWidth = s * 0.1; c.strokeStyle = '#0a0a0a'; c.stroke();
-  c.strokeStyle = 'rgba(0,0,0,0.18)'; c.lineWidth = Math.max(1, s * 0.02);   // web shading
-  c.beginPath();
-  c.moveTo((X(P.shL) + X(P.shR)) / 2, (Y(P.shL) + Y(P.shR)) / 2);
-  c.lineTo((X(P.hipL) + X(P.hipR)) / 2, (Y(P.hipL) + Y(P.hipR)) / 2); c.stroke();
+  c.clip();
+  _webNet(c, tcx, tcy, s * 0.85, 3, 9);
+  c.restore();
 
-  // arms (red) over the torso
+  // arms (red) over the torso + web hatching
   _limb(c, X(P.shL), Y(P.shL), X(P.elL), Y(P.elL), armW, RED);
   _limb(c, X(P.elL), Y(P.elL), X(P.haL), Y(P.haL), armW * 0.9, RED);
   _limb(c, X(P.shR), Y(P.shR), X(P.elR), Y(P.elR), armW, RED);
   _limb(c, X(P.elR), Y(P.elR), X(P.haR), Y(P.haR), armW * 0.9, RED);
+  _limbWeb(c, X(P.shL), Y(P.shL), X(P.elL), Y(P.elL), armW);
+  _limbWeb(c, X(P.elL), Y(P.elL), X(P.haL), Y(P.haL), armW * 0.9);
+  _limbWeb(c, X(P.shR), Y(P.shR), X(P.elR), Y(P.elR), armW);
+  _limbWeb(c, X(P.elR), Y(P.elR), X(P.haR), Y(P.haR), armW * 0.9);
   _blob(c, X(P.haL), Y(P.haL), s * 0.1, GLOVE);
   _blob(c, X(P.haR), Y(P.haR), s * 0.1, GLOVE);
 
-  c.fillStyle = '#0a0a0a';                                          // chest spider emblem
-  c.beginPath(); c.ellipse(tcx, tcy, s * 0.05, s * 0.1, 0, 0, Math.PI * 2); c.fill();
+  // chest spider emblem (abdomen + thorax) on top of the web
+  c.fillStyle = '#0a0a0a';
+  c.beginPath(); c.ellipse(tcx, tcy + s * 0.02, s * 0.055, s * 0.11, 0, 0, Math.PI * 2); c.fill();
+  c.beginPath(); c.ellipse(tcx, tcy - s * 0.12, s * 0.04, s * 0.05, 0, 0, Math.PI * 2); c.fill();
+
   _mask(c, X(P.head), Y(P.head), s * 0.2);
 }
 const POSES = [
@@ -1384,13 +1429,14 @@ function drawSplashUI() {
   uiCtx.fillStyle = '#ff2222'; uiCtx.fillText('BRONX!', cx, H * 0.24);
 
   uiCtx.save();
-  uiCtx.translate(cx + W * 0.30, H * 0.20); uiCtx.rotate(-0.18);
+  uiCtx.translate(cx + W * 0.30, H * 0.205); uiCtx.rotate(-0.16);
   uiCtx.fillStyle = '#ffe000'; uiCtx.strokeStyle = '#000'; uiCtx.lineWidth = 4;
   uiCtx.beginPath();
-  for (let i = 0; i < 16; i++) { const a = (i / 16) * Math.PI * 2, r = i % 2 === 0 ? 56 : 40; if (i === 0) uiCtx.moveTo(Math.cos(a) * r, Math.sin(a) * r); else uiCtx.lineTo(Math.cos(a) * r, Math.sin(a) * r); }
+  for (let i = 0; i < 16; i++) { const a = (i / 16) * Math.PI * 2, r = i % 2 === 0 ? 86 : 62; if (i === 0) uiCtx.moveTo(Math.cos(a) * r, Math.sin(a) * r); else uiCtx.lineTo(Math.cos(a) * r, Math.sin(a) * r); }
   uiCtx.closePath(); uiCtx.fill(); uiCtx.stroke();
-  uiCtx.fillStyle = '#000'; uiCtx.font = 'bold 20px "Bangers", "Arial Black", Arial';
-  uiCtx.fillText('FROM HARLEM', 0, -6); uiCtx.font = 'bold 32px "Bangers", "Arial Black", Arial'; uiCtx.fillText('12th BIRTHDAY!', 0, 22);
+  uiCtx.fillStyle = '#000'; uiCtx.textAlign = 'center';
+  uiCtx.font = 'bold 16px "Bangers", "Arial Black", Arial'; uiCtx.fillText('FROM HARLEM', 0, -10);
+  uiCtx.font = 'bold 18px "Bangers", "Arial Black", Arial'; uiCtx.fillText('12th BIRTHDAY!', 0, 14);
   uiCtx.restore();
 
   drawSpiderPose(uiCtx, cx, H * 0.46, Math.min(W * 0.12, 78), POSES[5]);   // mascot
@@ -1880,9 +1926,9 @@ function loop(ts) {
   uiCtx.font = 'bold 18px monospace';
   uiCtx.textAlign = 'right';
   uiCtx.lineWidth = 4; uiCtx.strokeStyle = '#000';
-  uiCtx.strokeText('BUILD 22 ✅', W - 12, H - 14);
+  uiCtx.strokeText('BUILD 23 ✅', W - 12, H - 14);
   uiCtx.fillStyle = '#00ff88';
-  uiCtx.fillText('BUILD 22 ✅', W - 12, H - 14);
+  uiCtx.fillText('BUILD 23 ✅', W - 12, H - 14);
   uiCtx.restore();
 
   requestAnimationFrame(loop);
