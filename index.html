@@ -101,6 +101,7 @@ let pendingSwipe = null;
 
 let obstacles = [];
 let coins = [];
+let coinCount = 0;
 let backgroundBldgs = [];
 let trees = [];
 let cars  = [];
@@ -539,8 +540,8 @@ function makeSpiderHero() {
 
 // ── Hero swing cycle — pendulum arc hanging from a visible web ──
 let swingPhase = 0;
-const SWING_SWAY   = 1.8;   // how far he drifts side-to-side within the lane
-const SWING_LIFT   = 1.6;   // how much higher he rises at the arc edges
+const SWING_SWAY   = 0.9;   // how far he drifts side-to-side within the lane (subtle)
+const SWING_LIFT   = 0.7;   // how much higher he rises at the arc edges (subtle)
 const SWING_BASE_Y = 1.4;   // hang height above the road
 function animateHero(dt) {
   if (!heroGroup) return;
@@ -556,14 +557,14 @@ function animateHero(dt) {
     : 0;
   heroGroup.position.x += s * SWING_SWAY * amp;            // (updateCamera set base x = camCurrentX)
   heroGroup.position.y  = SWING_BASE_Y + s * s * SWING_LIFT * amp;
-  heroGroup.rotation.z  = -s * 0.42 * amp - laneKick;
+  heroGroup.rotation.z  = -s * 0.26 * amp - laneKick;
 
   // pose: arms reach up to the web, legs tuck & trail (a little life from the arc)
   if (heroArmL) { heroArmL.rotation.x = -2.5 + s * 0.15; if (heroArmL.userData.elbow) heroArmL.userData.elbow.rotation.x = -0.25; }
   if (heroArmR) { heroArmR.rotation.x = -2.5 - s * 0.15; if (heroArmR.userData.elbow) heroArmR.userData.elbow.rotation.x = -0.25; }
   if (heroLegL) { heroLegL.rotation.x = 0.5 + s * 0.2;  if (heroLegL.userData.knee) heroLegL.userData.knee.rotation.x = 0.7; }
   if (heroLegR) { heroLegR.rotation.x = 0.4 - s * 0.2;  if (heroLegR.userData.knee) heroLegR.userData.knee.rotation.x = 0.8; }
-  if (heroUpper) heroUpper.rotation.y = s * 0.12 * amp;
+  if (heroUpper) heroUpper.rotation.y = s * 0.08 * amp;
 
   // visible web: from his hands up to an anchor high, forward, and to the swing side
   if (webLine) {
@@ -793,13 +794,12 @@ function makeCoin() {
   return disc;
 }
 function spawnCoinArc() {
-  // a short row of coins in one lane, rising and falling like a swing path
+  // a short straight row of coins in one lane at a steady height
   const lane = Math.floor(Math.random() * 3);
   const n = 5;
   for (let i = 0; i < n; i++) {
     const c = makeCoin();
-    const y = 2.4 + Math.sin((i / (n - 1)) * Math.PI) * 3.2;   // up then back down
-    c.position.set(LANE_X[lane], y, SPAWN_Z - i * 6);
+    c.position.set(LANE_X[lane], 3.0, SPAWN_Z - i * 6);
     scene.add(c);
     coins.push({ mesh: c, lane, got: false });
   }
@@ -813,6 +813,7 @@ function updateCoins(dt) {
         c.mesh.position.z > HIT_Z - 3 && c.mesh.position.z < HIT_Z + 5) {
       c.got = true;
       score += 10;
+      coinCount++;
       sfxCoin();
       floatText('+10', 0, '#ffd23f');
       scene.remove(c.mesh);
@@ -1122,6 +1123,20 @@ function drawHUD() {
   const sLabel = `SPEED ×${(speed / 25).toFixed(1)}`;
   uiCtx.strokeText(sLabel, 122, 56);
   uiCtx.fillText(sLabel, 122, 56);
+
+  // coin counter — gold coin icon + count, below the score badge
+  const cyCoin = 116;
+  uiCtx.beginPath();
+  uiCtx.arc(50, cyCoin, 15, 0, Math.PI * 2);
+  uiCtx.fillStyle = '#ffd23f'; uiCtx.fill();
+  uiCtx.lineWidth = 3; uiCtx.strokeStyle = '#000'; uiCtx.stroke();
+  uiCtx.fillStyle = '#9a6a00'; uiCtx.font = 'bold 16px "Bangers", "Arial Black", Arial';
+  uiCtx.textAlign = 'center'; uiCtx.fillText('$', 50, cyCoin + 6);
+  uiCtx.textAlign = 'left';
+  uiCtx.font = 'bold 26px "Bangers", "Arial Black", Arial';
+  uiCtx.lineWidth = 4; uiCtx.strokeStyle = '#000';
+  uiCtx.strokeText(`${coinCount}`, 74, cyCoin + 9);
+  uiCtx.fillStyle = '#ffd23f'; uiCtx.fillText(`${coinCount}`, 74, cyCoin + 9);
 }
 
 function drawSplashUI() {
@@ -1382,7 +1397,7 @@ function roundRect(x, y, w, h, r) {
 function startGame() {
   state = 'PLAYING';
   initAudio(); resumeAudio(); startBeat();
-  score = 0; speed = 25; playTime = 0; frameN = 0;
+  score = 0; speed = 25; playTime = 0; frameN = 0; coinCount = 0;
   obstacles.forEach(o => scene.remove(o.mesh));
   obstacles = [];
   coins.forEach(c => scene.remove(c.mesh));
@@ -1573,9 +1588,9 @@ function loop(ts) {
   uiCtx.font = 'bold 18px monospace';
   uiCtx.textAlign = 'right';
   uiCtx.lineWidth = 4; uiCtx.strokeStyle = '#000';
-  uiCtx.strokeText('BUILD 14 ✅', W - 12, H - 14);
+  uiCtx.strokeText('BUILD 15 ✅', W - 12, H - 14);
   uiCtx.fillStyle = '#00ff88';
-  uiCtx.fillText('BUILD 14 ✅', W - 12, H - 14);
+  uiCtx.fillText('BUILD 15 ✅', W - 12, H - 14);
   uiCtx.restore();
 
   requestAnimationFrame(loop);
