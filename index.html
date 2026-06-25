@@ -1712,7 +1712,7 @@ function roundRect(x, y, w, h, r) {
 function startGame() {
   state = 'PLAYING';
   initAudio(); resumeAudio(); startBeat();
-  score = 0; speed = 30; playTime = 0; frameN = 0; coinCount = 0;
+  score = 0; speed = 38; playTime = 0; frameN = 0; coinCount = 0;
   newScoreIndex = -1; scoresAnimT = 0;
   obstacles.forEach(o => scene.remove(o.mesh));
   obstacles = [];
@@ -1869,7 +1869,7 @@ function loop(ts) {
     playTime += dt;
     runDist  += speed * dt;
     score    += speed * dt * 0.5;
-    speed     = Math.min(62, 30 + playTime * 0.3);   // start brisker (was 25) so the opening isn't sluggish; same gradual climb
+    speed     = Math.min(75, 30 + playTime * 0.35);   // start brisker (was 25) so the opening isn't sluggish; same gradual climb
 
     const interval = Math.max(36, 90 - Math.floor(playTime / 18) * 8);
     if (frameN % interval === 0) spawnObstacle();
