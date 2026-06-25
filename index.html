@@ -602,13 +602,13 @@ function makeWeb() {
 }
 
 // ── Obstacles in lanes ───────────────────────────────────────
-const OBSTACLE_TYPES = ['scaffold', 'sign', 'cranebar', 'truck', 'bomb', 'vulture'];
+const OBSTACLE_TYPES = ['barricade', 'sign', 'cranebar', 'truck', 'bomb', 'vulture'];
 
 function spawnObstacle() {
   const lane = Math.floor(Math.random() * 3);
   const type = OBSTACLE_TYPES[Math.floor(Math.random() * OBSTACLE_TYPES.length)];
   let mesh;
-  if (type === 'scaffold') mesh = makeScaffold();
+  if (type === 'barricade') mesh = makeBarricade();
   else if (type === 'sign') mesh = makeHangingSign();
   else if (type === 'cranebar') mesh = makeCraneBar();
   else if (type === 'truck') mesh = makeTruck();
@@ -619,31 +619,46 @@ function spawnObstacle() {
   obstacles.push({ mesh, lane, type, hit: false });
 }
 
-function makeScaffold() {
+// red/white hazard stripes for the barricade panel
+function makeChevronTexture() {
+  const cnv = document.createElement('canvas');
+  cnv.width = cnv.height = 128;
+  const c = cnv.getContext('2d');
+  c.fillStyle = '#e23b3b'; c.fillRect(0, 0, 128, 128);     // red base
+  c.fillStyle = '#f4f4f4';                                  // white diagonal hazard stripes
+  const sw = 24;
+  for (let x = -128; x < 256; x += sw * 2) {
+    c.beginPath();
+    c.moveTo(x, 0); c.lineTo(x + sw, 0);
+    c.lineTo(x + sw - 128, 128); c.lineTo(x - 128, 128);
+    c.closePath(); c.fill();
+  }
+  return new THREE.CanvasTexture(cnv);
+}
+
+// clean Subway-Surfers-style barricade: striped panel + teal posts with ball caps
+function makeBarricade() {
   const g = new THREE.Group();
-  const mat = new THREE.MeshStandardMaterial({ color: 0xffa500, metalness: 0.5, roughness: 0.5 });
-  for (const xx of [-1.5, 1.5]) {
-    const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.12, 8, 6), mat);
-    pole.position.set(xx, 4, 0);
-    g.add(pole);
+  const tealMat  = new THREE.MeshStandardMaterial({ color: 0x2bb6c4, roughness: 0.5, metalness: 0.2 });
+  const panelMat = new THREE.MeshStandardMaterial({ map: makeChevronTexture(), roughness: 0.6 });
+
+  const panel = new THREE.Mesh(new THREE.BoxGeometry(3.0, 2.0, 0.25), panelMat);
+  panel.position.set(0, 1.7, 0);
+  g.add(panel);
+
+  for (const yy of [0.6, 2.8]) {                    // teal top + bottom rails
+    const rail = new THREE.Mesh(new THREE.BoxGeometry(3.5, 0.26, 0.36), tealMat);
+    rail.position.set(0, yy, 0);
+    g.add(rail);
   }
-  for (let y of [2, 4, 6, 8]) {
-    const bar = new THREE.Mesh(new THREE.BoxGeometry(3.2, 0.15, 0.4), mat);
-    bar.position.y = y;
-    g.add(bar);
+  for (const sx of [-1.65, 1.65]) {                 // teal posts + ball caps
+    const post = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.18, 3.4, 12), tealMat);
+    post.position.set(sx, 1.7, 0);
+    g.add(post);
+    const cap = new THREE.Mesh(new THREE.SphereGeometry(0.3, 14, 14), tealMat);
+    cap.position.set(sx, 3.5, 0);
+    g.add(cap);
   }
-  const tarp = new THREE.Mesh(
-    new THREE.PlaneGeometry(3, 5),
-    new THREE.MeshStandardMaterial({ color: 0xff4477, side: THREE.DoubleSide })
-  );
-  tarp.position.set(0, 5, 0.1);
-  g.add(tarp);
-  const warn = new THREE.Mesh(
-    new THREE.PlaneGeometry(2.5, 0.6),
-    new THREE.MeshBasicMaterial({ color: 0xffe000, side: THREE.DoubleSide })
-  );
-  warn.position.set(0, 8.5, 0);
-  g.add(warn);
   return g;
 }
 
@@ -1646,9 +1661,9 @@ function loop(ts) {
   uiCtx.font = 'bold 18px monospace';
   uiCtx.textAlign = 'right';
   uiCtx.lineWidth = 4; uiCtx.strokeStyle = '#000';
-  uiCtx.strokeText('BUILD 17 ✅', W - 12, H - 14);
+  uiCtx.strokeText('BUILD 18 ✅', W - 12, H - 14);
   uiCtx.fillStyle = '#00ff88';
-  uiCtx.fillText('BUILD 17 ✅', W - 12, H - 14);
+  uiCtx.fillText('BUILD 18 ✅', W - 12, H - 14);
   uiCtx.restore();
 
   requestAnimationFrame(loop);
