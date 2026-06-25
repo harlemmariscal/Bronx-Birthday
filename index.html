@@ -111,6 +111,8 @@ let particles3D = [];
 let hiScores = [];
 try { hiScores = JSON.parse(localStorage.getItem('bronx-bday-scores') || '[]'); } catch(e) {}
 const initials = { typed: '', score: 0 };
+let scoresAnimT = 0;       // drives the board fade-in animation
+let newScoreIndex = -1;    // which board row is the just-earned high score (-1 = none)
 
 // Native keyboard for initials
 const initialsInput = document.getElementById('initialsInput');
@@ -815,7 +817,7 @@ function updateCoins(dt) {
       score += 10;
       coinCount++;
       sfxCoin();
-      floatText('+10', 0, '#ffd23f');
+      floatText('+1', 0, '#ffd23f');
       scene.remove(c.mesh);
       coins.splice(i, 1);
       continue;
@@ -944,9 +946,13 @@ window.addEventListener('keydown', e => {
 
 function handleInput(tx, ty, dx, dy) {
   if (state === 'SPLASH')   { startGame(); return; }
-  if (state === 'DEAD' && hero.deadT > 0.7) { goInitials(); return; }
+  if (state === 'DEAD' && hero.deadT > 0.7) {
+    if (isHighScore(Math.floor(score))) goInitials();   // earned a spot → enter initials
+    else goScores();                                     // otherwise just view the board
+    return;
+  }
   if (state === 'INITIALS') { handleInitialsInput(tx, ty, dx, dy); return; }
-  if (state === 'SCORES')   { startGame(); return; }
+  if (state === 'SCORES')   { if (scoresAnimT > 0.5) startGame(); return; }   // let the reveal play
   if (state !== 'PLAYING' || hero.dead) return;
   if (Math.abs(dx) > 30) doSwipe(dx < 0 ? 'left' : 'right');
 }
@@ -1239,12 +1245,20 @@ function drawGameOverUI() {
   uiCtx.strokeText(`${Math.floor(score)} meters`, cx, H * 0.68);
   uiCtx.fillStyle = '#ffe000'; uiCtx.fillText(`${Math.floor(score)} meters`, cx, H * 0.68);
 
+  const hs = isHighScore(Math.floor(score));
+  if (hs) {
+    uiCtx.font = `bold ${Math.min(30, W * 0.056)}px "Bangers", "Arial Black", Arial`;
+    uiCtx.fillStyle = '#ffe000'; uiCtx.strokeStyle = '#000'; uiCtx.lineWidth = 5;
+    uiCtx.strokeText('NEW HIGH SCORE!', cx, H * 0.77);
+    uiCtx.fillText('NEW HIGH SCORE!', cx, H * 0.77);
+  }
   if (hero.deadT > 0.7) {
     uiCtx.globalAlpha = 0.65 + 0.35 * Math.sin(frameN * 0.1);
     uiCtx.font = `bold ${Math.min(22, W * 0.042)}px Arial`;
-    uiCtx.fillStyle = '#fff';
-    uiCtx.strokeText('TAP TO ENTER YOUR INITIALS', cx, H * 0.85);
-    uiCtx.fillText('TAP TO ENTER YOUR INITIALS', cx, H * 0.85);
+    uiCtx.fillStyle = '#fff'; uiCtx.strokeStyle = '#000'; uiCtx.lineWidth = 3;
+    const msg = hs ? 'TAP TO ENTER YOUR INITIALS' : 'TAP TO SEE SCORES';
+    uiCtx.strokeText(msg, cx, H * 0.85);
+    uiCtx.fillText(msg, cx, H * 0.85);
     uiCtx.globalAlpha = 1;
   }
 }
@@ -1341,10 +1355,12 @@ function drawScoresUI() {
   uiCtx.closePath();
   uiCtx.fillStyle = '#ffe000'; uiCtx.fill();
   uiCtx.strokeStyle = '#000'; uiCtx.lineWidth = 4; uiCtx.stroke();
-  uiCtx.font = `bold ${Math.min(34, W * 0.062)}px "Bangers", "Arial Black", Arial`;
+  const isNew = newScoreIndex >= 0;
+  uiCtx.font = `bold ${Math.min(isNew ? 30 : 34, W * 0.06)}px "Bangers", "Arial Black", Arial`;
   uiCtx.fillStyle = '#cc0000'; uiCtx.strokeStyle = '#000'; uiCtx.lineWidth = 4;
-  uiCtx.strokeText('HIGH SCORES', 0, 12);
-  uiCtx.fillText('HIGH SCORES', 0, 12);
+  const title = isNew ? 'NEW HIGH SCORE!' : 'HIGH SCORES';
+  uiCtx.strokeText(title, 0, 10);
+  uiCtx.fillText(title, 0, 10);
   uiCtx.restore();
 
   const rowH = Math.min(56, H * 0.09);
@@ -1352,7 +1368,24 @@ function drawScoresUI() {
   const rankColors = ['#ffe000','#dddddd','#cd7f32','#cc88ff','#9966cc'];
   const topScore = hiScores[0]?.score || 1;
   hiScores.slice(0, 5).forEach((e, i) => {
+    // staggered fade + slide-in from the right
+    const appear = Math.max(0, Math.min(1, (scoresAnimT - i * 0.12) / 0.4));
+    if (appear <= 0) return;
+    const ease = appear * (2 - appear);
+    const isYou = i === newScoreIndex;
     const ry = startY + i * rowH;
+
+    uiCtx.save();
+    uiCtx.globalAlpha = ease;
+    uiCtx.translate((1 - ease) * W * 0.18, 0);
+
+    if (isYou) {   // pulsing gold highlight behind the just-earned row
+      const pulse = 0.22 + 0.18 * Math.sin(frameN * 0.18);
+      uiCtx.fillStyle = `rgba(255,210,60,${pulse})`;
+      roundRect(cx - W * 0.32, ry - rowH * 0.55, W * 0.64, rowH * 0.92, 8); uiCtx.fill();
+      uiCtx.strokeStyle = '#ffe000'; uiCtx.lineWidth = 3; uiCtx.stroke();
+    }
+
     const barW = (e.score / topScore) * W * 0.55;
     uiCtx.fillStyle = `rgba(140,80,200,0.25)`;
     roundRect(cx - W * 0.28, ry - rowH * 0.5, barW, rowH * 0.78, 4); uiCtx.fill();
@@ -1368,20 +1401,24 @@ function drawScoresUI() {
     uiCtx.textAlign = 'right'; uiCtx.fillStyle = rankColors[i];
     uiCtx.strokeText(`${e.score}m`, cx * 1.58, ry);
     uiCtx.fillText(`${e.score}m`, cx * 1.58, ry);
+    uiCtx.restore();
   });
 
   if (hiScores.length === 0) {
     uiCtx.font = `${Math.min(22, W * 0.042)}px Arial`;
     uiCtx.fillStyle = 'rgba(255,255,255,0.7)';
+    uiCtx.textAlign = 'center';
     uiCtx.fillText('No scores yet — you be the first!', cx, H * 0.5);
   }
 
-  uiCtx.globalAlpha = 0.65 + 0.35 * Math.sin(frameN * 0.09);
-  uiCtx.font = `bold ${Math.min(22, W * 0.042)}px Arial`;
-  uiCtx.strokeStyle = '#000'; uiCtx.lineWidth = 3;
-  uiCtx.strokeText('TAP TO PLAY AGAIN', cx, H * 0.93);
-  uiCtx.fillStyle = '#ffe000'; uiCtx.fillText('TAP TO PLAY AGAIN', cx, H * 0.93);
-  uiCtx.globalAlpha = 1;
+  if (scoresAnimT > 0.6) {   // prompt appears once the board has come in
+    uiCtx.globalAlpha = 0.65 + 0.35 * Math.sin(frameN * 0.09);
+    uiCtx.font = `bold ${Math.min(22, W * 0.042)}px Arial`;
+    uiCtx.strokeStyle = '#000'; uiCtx.lineWidth = 3; uiCtx.textAlign = 'center';
+    uiCtx.strokeText('TAP TO PLAY AGAIN', cx, H * 0.93);
+    uiCtx.fillStyle = '#ffe000'; uiCtx.fillText('TAP TO PLAY AGAIN', cx, H * 0.93);
+    uiCtx.globalAlpha = 1;
+  }
 }
 
 function roundRect(x, y, w, h, r) {
@@ -1398,6 +1435,7 @@ function startGame() {
   state = 'PLAYING';
   initAudio(); resumeAudio(); startBeat();
   score = 0; speed = 25; playTime = 0; frameN = 0; coinCount = 0;
+  newScoreIndex = -1; scoresAnimT = 0;
   obstacles.forEach(o => scene.remove(o.mesh));
   obstacles = [];
   coins.forEach(c => scene.remove(c.mesh));
@@ -1412,6 +1450,18 @@ function startGame() {
   initialsInput.style.pointerEvents = 'none';
 }
 
+// did this run earn a top-5 spot?
+function isHighScore(s) {
+  return s > 0 && (hiScores.length < 5 || s > hiScores[hiScores.length - 1].score);
+}
+
+// view the board read-only (no new entry, no initials prompt)
+function goScores() {
+  newScoreIndex = -1;
+  scoresAnimT = 0;
+  state = 'SCORES';
+}
+
 function goInitials() {
   initials.typed = '';
   initials.score = Math.floor(score);
@@ -1423,9 +1473,12 @@ function goInitials() {
 
 function saveInitials() {
   const ini = (initials.typed || 'BRX').padEnd(3, 'X').slice(0, 3);
-  hiScores.push({ score: initials.score, initials: ini });
+  const entry = { score: initials.score, initials: ini };
+  hiScores.push(entry);
   hiScores.sort((a, b) => b.score - a.score);
   hiScores = hiScores.slice(0, 5);
+  newScoreIndex = hiScores.indexOf(entry);   // row to highlight + fade in
+  scoresAnimT = 0;
   try { localStorage.setItem('bronx-bday-scores', JSON.stringify(hiScores)); } catch(e) {}
   initialsInput.blur();
   initialsInput.style.pointerEvents = 'none';
@@ -1559,6 +1612,7 @@ function loop(ts) {
   } else if (state === 'SPLASH' || state === 'INITIALS' || state === 'SCORES') {
     speed = 6;
     recycleWorld();
+    if (state === 'SCORES') scoresAnimT += dt;   // drive the board fade-in
   }
 
   updateCamera(dt);
@@ -1588,9 +1642,9 @@ function loop(ts) {
   uiCtx.font = 'bold 18px monospace';
   uiCtx.textAlign = 'right';
   uiCtx.lineWidth = 4; uiCtx.strokeStyle = '#000';
-  uiCtx.strokeText('BUILD 15 ✅', W - 12, H - 14);
+  uiCtx.strokeText('BUILD 16 ✅', W - 12, H - 14);
   uiCtx.fillStyle = '#00ff88';
-  uiCtx.fillText('BUILD 15 ✅', W - 12, H - 14);
+  uiCtx.fillText('BUILD 16 ✅', W - 12, H - 14);
   uiCtx.restore();
 
   requestAnimationFrame(loop);
