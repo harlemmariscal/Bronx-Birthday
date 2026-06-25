@@ -421,62 +421,114 @@ function makeSpiderSymbolTexture() {
   return new THREE.CanvasTexture(cnv);
 }
 
+// big black spider on a TRANSPARENT background — sits cleanly on the suit
+function makeSpiderEmblemTexture() {
+  const cnv = document.createElement('canvas');
+  cnv.width = cnv.height = 256;
+  const c = cnv.getContext('2d');
+  c.clearRect(0, 0, 256, 256);
+  c.fillStyle = '#0a0a0a';
+  c.beginPath(); c.ellipse(128, 150, 20, 40, 0, 0, Math.PI * 2); c.fill();   // abdomen
+  c.beginPath(); c.ellipse(128, 104, 15, 17, 0, 0, Math.PI * 2); c.fill();   // thorax
+  c.strokeStyle = '#0a0a0a'; c.lineWidth = 7; c.lineCap = 'round';
+  for (const s of [-1, 1]) {
+    for (let i = 0; i < 4; i++) {
+      const y1 = 116 + i * 11;
+      const x2 = 128 + s * (24 + 50);
+      const y2 = y1 + (i - 1.5) * 26;
+      c.beginPath();
+      c.moveTo(128 + s * 14, y1);
+      c.quadraticCurveTo(128 + s * 46, y1 - 10, x2, y2);
+      c.stroke();
+    }
+  }
+  return new THREE.CanvasTexture(cnv);
+}
+
 function makeSpiderHero() {
   const g = new THREE.Group();
 
-  const webRed = makeWebPatternTexture('#cc1818', 'rgba(0,0,0,0.3)');
-  const webBlue = makeWebPatternTexture('#1944a8', 'rgba(0,0,0,0.4)');
-  const redMat = new THREE.MeshStandardMaterial({ map: webRed, roughness: 0.7 });
-  const blueMat = new THREE.MeshStandardMaterial({ map: webBlue, roughness: 0.65 });
-  const fistMat = new THREE.MeshStandardMaterial({ color: 0x7a0e0e });
+  const webRed  = makeWebPatternTexture('#d12626', 'rgba(0,0,0,0.30)');
+  const webBlue = makeWebPatternTexture('#1d49b8', 'rgba(0,0,0,0.42)');
+  const redMat   = new THREE.MeshStandardMaterial({ map: webRed,  roughness: 0.55 });
+  const blueMat  = new THREE.MeshStandardMaterial({ map: webBlue, roughness: 0.55 });
+  const gloveMat = new THREE.MeshStandardMaterial({ color: 0xb01818, roughness: 0.45 }); // gloves+boots
+  const eyeMat   = new THREE.MeshBasicMaterial({ color: 0xffffff });
+  const eyeRim   = new THREE.MeshBasicMaterial({ color: 0x0a0a0a });
 
-  heroTorso = new THREE.Mesh(new THREE.CapsuleGeometry(0.55, 1.0, 8, 16), redMat);
-  heroTorso.position.y = 1.6;
-  g.add(heroTorso);
+  // ===== LEGS (blue thigh+shin, red boots, slightly trailing) =====
+  function makeLeg(side) {
+    const leg = new THREE.Group();
+    const thigh = new THREE.Mesh(new THREE.CapsuleGeometry(0.2, 0.62, 6, 10), blueMat);
+    thigh.position.y = -0.38; leg.add(thigh);
+    const shin = new THREE.Mesh(new THREE.CapsuleGeometry(0.165, 0.62, 6, 10), blueMat);
+    shin.position.set(0, -1.0, -0.06); shin.rotation.x = 0.22; leg.add(shin);
+    const boot = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.22, 0.6), gloveMat);
+    boot.position.set(0, -1.42, 0.06); leg.add(boot);
+    leg.position.set(side * 0.26, 1.5, 0);
+    leg.rotation.x = -0.14;            // trail behind the run
+    return leg;
+  }
+  heroLegL = makeLeg(-1); heroLegR = makeLeg(1);
+  g.add(heroLegL); g.add(heroLegR);
 
-  const spiderTex = makeSpiderSymbolTexture();
-  const spiderMat = new THREE.MeshBasicMaterial({ map: spiderTex, transparent: false });
-  const spiderPlane = new THREE.Mesh(new THREE.PlaneGeometry(0.9, 1.1), spiderMat);
-  spiderPlane.position.set(0, 1.6, 0.55);
-  spiderPlane.rotation.y = 0;
-  g.add(spiderPlane);
+  // ===== PELVIS (blue) =====
+  const pelvis = new THREE.Mesh(new THREE.CapsuleGeometry(0.33, 0.2, 6, 12), blueMat);
+  pelvis.position.y = 1.55; pelvis.scale.set(1, 1, 0.8); g.add(pelvis);
 
-  heroHead = new THREE.Mesh(new THREE.SphereGeometry(0.42, 16, 16), redMat);
-  heroHead.position.y = 2.7;
-  g.add(heroHead);
+  // ===== UPPER BODY (leans forward into the swing) =====
+  const upper = new THREE.Group();
+  upper.position.y = 1.5; upper.rotation.x = -0.2;
+  g.add(upper);
 
-  heroArmR = new THREE.Mesh(new THREE.CapsuleGeometry(0.18, 1.1, 6, 8), redMat);
-  heroArmR.position.set(0.5, 2.6, 0);
-  heroArmR.rotation.z = -0.3;
-  g.add(heroArmR);
+  heroTorso = new THREE.Mesh(new THREE.CapsuleGeometry(0.4, 0.78, 8, 16), redMat);
+  heroTorso.position.y = 0.55; heroTorso.scale.set(1.08, 1, 0.74);
+  upper.add(heroTorso);
 
-  heroArmL = new THREE.Mesh(new THREE.CapsuleGeometry(0.18, 1.1, 6, 8), redMat);
-  heroArmL.position.set(-0.5, 2.6, 0);
-  heroArmL.rotation.z = 0.3;
-  g.add(heroArmL);
+  // bold black spider on the BACK (the side facing the camera)
+  const emblem = new THREE.Mesh(
+    new THREE.PlaneGeometry(0.62, 0.82),
+    new THREE.MeshBasicMaterial({ map: makeSpiderEmblemTexture(), transparent: true })
+  );
+  emblem.position.set(0, 0.62, 0.31); upper.add(emblem);
 
-  const fistR = new THREE.Mesh(new THREE.SphereGeometry(0.22, 10, 10), fistMat);
-  fistR.position.set(0.7, 3.35, 0);
-  g.add(fistR);
-  const fistL = new THREE.Mesh(new THREE.SphereGeometry(0.22, 10, 10), fistMat);
-  fistL.position.set(-0.7, 3.35, 0);
-  g.add(fistL);
+  // shoulders
+  for (const s of [-1, 1]) {
+    const delt = new THREE.Mesh(new THREE.SphereGeometry(0.22, 10, 10), redMat);
+    delt.position.set(s * 0.42, 0.92, 0); upper.add(delt);
+  }
 
-  heroLegR = new THREE.Mesh(new THREE.CapsuleGeometry(0.22, 1.1, 6, 8), blueMat);
-  heroLegR.position.set(0.25, 0.55, 0);
-  g.add(heroLegR);
+  // ===== HEAD / MASK (red, smaller, with eyes that wrap to the sides) =====
+  heroHead = new THREE.Mesh(new THREE.SphereGeometry(0.34, 18, 18), redMat);
+  heroHead.position.y = 1.32; heroHead.scale.set(0.95, 1.05, 1);
+  upper.add(heroHead);
+  for (const s of [-1, 1]) {
+    const eye = new THREE.Mesh(new THREE.PlaneGeometry(0.2, 0.13), eyeMat);
+    eye.position.set(s * 0.18, 1.34, -0.27);  // front of mask
+    eye.rotation.set(0.1, Math.PI + s * 0.5, -s * 0.2);
+    upper.add(eye);
+    const rim = new THREE.Mesh(new THREE.PlaneGeometry(0.25, 0.18), eyeRim);
+    rim.position.set(s * 0.18, 1.34, -0.275);
+    rim.rotation.copy(eye.rotation);
+    upper.add(rim);
+  }
 
-  heroLegL = new THREE.Mesh(new THREE.CapsuleGeometry(0.22, 1.1, 6, 8), blueMat);
-  heroLegL.position.set(-0.25, 0.55, 0);
-  g.add(heroLegL);
-
-  const bootMat = new THREE.MeshStandardMaterial({ color: 0x7a0e0e });
-  const bootR = new THREE.Mesh(new THREE.BoxGeometry(0.45, 0.25, 0.6), bootMat);
-  bootR.position.set(0.25, 0.1, 0.1);
-  g.add(bootR);
-  const bootL = new THREE.Mesh(new THREE.BoxGeometry(0.45, 0.25, 0.6), bootMat);
-  bootL.position.set(-0.25, 0.1, 0.1);
-  g.add(bootL);
+  // ===== ARMS (raised overhead gripping the web; red w/ red gloves) =====
+  function makeArm(side) {
+    const arm = new THREE.Group();
+    const upperArm = new THREE.Mesh(new THREE.CapsuleGeometry(0.15, 0.6, 6, 10), redMat);
+    upperArm.position.y = 0.3; arm.add(upperArm);
+    const foreArm = new THREE.Mesh(new THREE.CapsuleGeometry(0.13, 0.55, 6, 10), redMat);
+    foreArm.position.y = 0.85; arm.add(foreArm);
+    const glove = new THREE.Mesh(new THREE.SphereGeometry(0.16, 10, 10), gloveMat);
+    glove.position.y = 1.2; arm.add(glove);
+    arm.position.set(side * 0.42, 0.92, 0);
+    arm.rotation.z = -side * 0.32;     // reach up and slightly inward toward the web
+    arm.rotation.x = -0.15;
+    return arm;
+  }
+  heroArmL = makeArm(-1); heroArmR = makeArm(1);
+  upper.add(heroArmL); upper.add(heroArmR);
 
   return g;
 }
@@ -1446,9 +1498,9 @@ function loop(ts) {
   uiCtx.font = 'bold 18px monospace';
   uiCtx.textAlign = 'right';
   uiCtx.lineWidth = 4; uiCtx.strokeStyle = '#000';
-  uiCtx.strokeText('BUILD 11 ✅', W - 12, H - 14);
+  uiCtx.strokeText('BUILD 12 ✅', W - 12, H - 14);
   uiCtx.fillStyle = '#00ff88';
-  uiCtx.fillText('BUILD 11 ✅', W - 12, H - 14);
+  uiCtx.fillText('BUILD 12 ✅', W - 12, H - 14);
   uiCtx.restore();
 
   requestAnimationFrame(loop);
