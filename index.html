@@ -100,6 +100,7 @@ let camTilt = 0;
 let pendingSwipe = null;
 
 let obstacles = [];
+let coins = [];
 let backgroundBldgs = [];
 let trees = [];
 let cars  = [];
@@ -536,32 +537,46 @@ function makeSpiderHero() {
   return g;
 }
 
-// ── Hero run cycle — legs stride, arms pump, body bobs ───────
-let runPhase = 0;
+// ── Hero swing cycle — pendulum arc hanging from a visible web ──
+let swingPhase = 0;
+const SWING_SWAY   = 1.8;   // how far he drifts side-to-side within the lane
+const SWING_LIFT   = 1.6;   // how much higher he rises at the arc edges
+const SWING_BASE_Y = 1.4;   // hang height above the road
 function animateHero(dt) {
   if (!heroGroup) return;
   const playing = state === 'PLAYING' && !hero.dead;
-  const cadence  = playing ? 6 + speed * 0.12 : 3.5;     // faster legs at higher speed
-  const amp      = playing ? 1 : 0.45;                    // gentle idle on menus
-  runPhase += dt * cadence;
-  const p = runPhase;
+  const rate = playing ? 2.0 + speed * 0.03 : 1.3;   // swing tempo (faster when faster)
+  const amp  = playing ? 1 : 0.6;
+  if (!hero.dead) swingPhase += dt * rate;
+  const s = Math.sin(swingPhase);          // -1..1 across the arc
 
-  // legs: opposite phase; knees bend on the way through
-  if (heroLegR) {
-    heroLegR.rotation.x = Math.sin(p) * 0.7 * amp;
-    if (heroLegR.userData.knee) heroLegR.userData.knee.rotation.x = (0.45 + Math.sin(p - 0.7) * 0.45) * amp;
-  }
-  if (heroLegL) {
-    heroLegL.rotation.x = Math.sin(p + Math.PI) * 0.7 * amp;
-    if (heroLegL.userData.knee) heroLegL.userData.knee.rotation.x = (0.45 + Math.sin(p + Math.PI - 0.7) * 0.45) * amp;
-  }
-  // arms pump opposite to the legs
-  if (heroArmR) heroArmR.rotation.x = Math.sin(p + Math.PI) * 0.8 * amp;
-  if (heroArmL) heroArmL.rotation.x = Math.sin(p) * 0.8 * amp;
+  // body: sway within the lane, rise at the edges (lowest in the middle), roll into the swing
+  const laneKick = hero.swinging
+    ? ((hero.swingTo > hero.swingFrom ? 1 : -1) * 0.25 * Math.sin(Math.PI * hero.swingT))
+    : 0;
+  heroGroup.position.x += s * SWING_SWAY * amp;            // (updateCamera set base x = camCurrentX)
+  heroGroup.position.y  = SWING_BASE_Y + s * s * SWING_LIFT * amp;
+  heroGroup.rotation.z  = -s * 0.42 * amp - laneKick;
 
-  // body bob + subtle torso twist
-  heroGroup.position.y = Math.abs(Math.sin(p)) * 0.12 * amp;
-  if (heroUpper) heroUpper.rotation.y = Math.sin(p) * 0.08 * amp;
+  // pose: arms reach up to the web, legs tuck & trail (a little life from the arc)
+  if (heroArmL) { heroArmL.rotation.x = -2.5 + s * 0.15; if (heroArmL.userData.elbow) heroArmL.userData.elbow.rotation.x = -0.25; }
+  if (heroArmR) { heroArmR.rotation.x = -2.5 - s * 0.15; if (heroArmR.userData.elbow) heroArmR.userData.elbow.rotation.x = -0.25; }
+  if (heroLegL) { heroLegL.rotation.x = 0.5 + s * 0.2;  if (heroLegL.userData.knee) heroLegL.userData.knee.rotation.x = 0.7; }
+  if (heroLegR) { heroLegR.rotation.x = 0.4 - s * 0.2;  if (heroLegR.userData.knee) heroLegR.userData.knee.rotation.x = 0.8; }
+  if (heroUpper) heroUpper.rotation.y = s * 0.12 * amp;
+
+  // visible web: from his hands up to an anchor high, forward, and to the swing side
+  if (webLine) {
+    webLine.visible = true;
+    const handY = heroGroup.position.y + 3.3;
+    _webStart.set(heroGroup.position.x, handY, 0);
+    _webEnd.set(camCurrentX - s * 3, handY + 16, -12);    // off-screen up & to the side (phantom anchor)
+    _webMid.copy(_webStart).add(_webEnd).multiplyScalar(0.5);
+    webLine.position.copy(_webMid);
+    webLine.scale.set(1, _webStart.distanceTo(_webEnd), 1);
+    _webDir.copy(_webEnd).sub(_webStart).normalize();
+    webLine.quaternion.setFromUnitVectors(_UP, _webDir);
+  }
 }
 
 // reusable vectors so we don't allocate every frame
@@ -767,6 +782,47 @@ function makeVulture() {
   return g;
 }
 
+// ── Coins (spinning gold discs along the swing arcs) ─────────
+function makeCoin() {
+  const disc = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.55, 0.55, 0.12, 18),
+    new THREE.MeshStandardMaterial({ color: 0xffd23f, metalness: 0.7, roughness: 0.3,
+                                     emissive: 0x7a5800, emissiveIntensity: 0.6 })
+  );
+  disc.rotation.x = Math.PI / 2;     // face the camera, spin around Y
+  return disc;
+}
+function spawnCoinArc() {
+  // a short row of coins in one lane, rising and falling like a swing path
+  const lane = Math.floor(Math.random() * 3);
+  const n = 5;
+  for (let i = 0; i < n; i++) {
+    const c = makeCoin();
+    const y = 2.4 + Math.sin((i / (n - 1)) * Math.PI) * 3.2;   // up then back down
+    c.position.set(LANE_X[lane], y, SPAWN_Z - i * 6);
+    scene.add(c);
+    coins.push({ mesh: c, lane, got: false });
+  }
+}
+function updateCoins(dt) {
+  for (let i = coins.length - 1; i >= 0; i--) {
+    const c = coins[i];
+    c.mesh.position.z += speed * dt;
+    c.mesh.rotation.y += dt * 5;     // spin for shine
+    if (!c.got && !hero.dead && c.lane === hero.lane &&
+        c.mesh.position.z > HIT_Z - 3 && c.mesh.position.z < HIT_Z + 5) {
+      c.got = true;
+      score += 10;
+      sfxCoin();
+      floatText('+10', 0, '#ffd23f');
+      scene.remove(c.mesh);
+      coins.splice(i, 1);
+      continue;
+    }
+    if (c.mesh.position.z > 30) { scene.remove(c.mesh); coins.splice(i, 1); }
+  }
+}
+
 // ── Camera ───────────────────────────────────────────────────
 const CAM_BASE = new THREE.Vector3(0, 7.5, 7);
 const CAM_LOOK = new THREE.Vector3(0, 2, -20);   // back to the previous angle
@@ -798,36 +854,13 @@ function updateCamera(dt) {
   if (camShake > 0) camShake = Math.max(0, camShake - dt * 35);
 
   camera.position.set(camCurrentX + sx, CAM_BASE.y + sy, CAM_BASE.z);
-  heroGroup.position.set(camCurrentX, 0, 0);
-  if (hero.swinging) {
-    const dir = hero.swingTo > hero.swingFrom ? 1 : -1;
-    heroGroup.rotation.z = -dir * 0.3 * Math.sin(Math.PI * hero.swingT);
-  } else {
-    heroGroup.rotation.z = -camTilt * 0.4;
-  }
-  // (body bob is handled in animateHero now)
+  heroGroup.position.x = camCurrentX;        // lane base; animateHero adds the swing sway/bob
+  heroGroup.position.z = 0;
+  // (hero y, roll, pose, and the web are all handled in animateHero)
 
   const lookTarget = new THREE.Vector3(camCurrentX, CAM_LOOK.y, CAM_LOOK.z);
   camera.lookAt(lookTarget);
   camera.rotateZ(camTilt);
-
-  if (webLine) {
-    // web only shows during a lane-swing (a quick THWIP strand), hidden while running
-    if (hero.swinging) {
-      webLine.visible = true;
-      const dir = hero.swingTo > hero.swingFrom ? 1 : -1;
-      const aim = dir * 9 * Math.sin(Math.PI * hero.swingT);
-      _webStart.set(camCurrentX + dir * 0.4, 3.2 + heroGroup.position.y, 0);
-      _webEnd.set(camCurrentX + aim, 50, -60);       // shoots toward the new lane, high+forward
-      _webMid.copy(_webStart).add(_webEnd).multiplyScalar(0.5);
-      webLine.position.copy(_webMid);
-      webLine.scale.set(1, _webStart.distanceTo(_webEnd), 1);
-      _webDir.copy(_webEnd).sub(_webStart).normalize();
-      webLine.quaternion.setFromUnitVectors(_UP, _webDir);
-    } else {
-      webLine.visible = false;
-    }
-  }
 }
 
 // ── Recycle world objects ────────────────────────────────────
@@ -1352,6 +1385,8 @@ function startGame() {
   score = 0; speed = 25; playTime = 0; frameN = 0;
   obstacles.forEach(o => scene.remove(o.mesh));
   obstacles = [];
+  coins.forEach(c => scene.remove(c.mesh));
+  coins = [];
   particles3D.forEach(p => scene.remove(p.mesh));
   particles3D = [];
   floaters = [];
@@ -1438,6 +1473,10 @@ function sfxCrash() {              // wipeout
   noiseBurst(0.4, 0.5, 2400);
   blip(220, 40, 0.5, 'sawtooth', 0.35);
 }
+function sfxCoin() {               // bright coin pickup
+  blip(900, 1350, 0.07, 'square', 0.11);
+  blip(1350, 1800, 0.06, 'square', 0.07);
+}
 
 function startBeat() {            // light looping pulse while playing
   if (!audioCtx || beatTimer) return;
@@ -1488,9 +1527,11 @@ function loop(ts) {
 
     const interval = Math.max(36, 90 - Math.floor(playTime / 18) * 8);
     if (frameN % interval === 0) spawnObstacle();
+    if (frameN % 150 === 75) spawnCoinArc();   // coin runs between hazards
 
     updateSwing(dt);
     updateObstacles(dt);
+    updateCoins(dt);
     recycleWorld();
     updateFloaters(dt);
     updateParticles3D(dt);
@@ -1532,9 +1573,9 @@ function loop(ts) {
   uiCtx.font = 'bold 18px monospace';
   uiCtx.textAlign = 'right';
   uiCtx.lineWidth = 4; uiCtx.strokeStyle = '#000';
-  uiCtx.strokeText('BUILD 13 ✅', W - 12, H - 14);
+  uiCtx.strokeText('BUILD 14 ✅', W - 12, H - 14);
   uiCtx.fillStyle = '#00ff88';
-  uiCtx.fillText('BUILD 13 ✅', W - 12, H - 14);
+  uiCtx.fillText('BUILD 14 ✅', W - 12, H - 14);
   uiCtx.restore();
 
   requestAnimationFrame(loop);
