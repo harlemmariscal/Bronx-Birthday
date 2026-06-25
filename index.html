@@ -1339,9 +1339,9 @@ function noiseBurst(dur, vol, cutoff) {
   src.start(t); src.stop(t + dur);
 }
 
-function sfxThwip() {              // web shot on each swing
-  blip(420, 1500, 0.13, 'square', 0.16);
-  blip(950, 1900, 0.09, 'triangle', 0.09);
+function sfxThwip() {              // web shot on each swing — soft & subtle
+  blip(600, 1350, 0.08, 'sine', 0.055);
+  blip(1000, 1650, 0.05, 'triangle', 0.03);
 }
 function sfxCrash() {              // wipeout
   noiseBurst(0.4, 0.5, 2400);
