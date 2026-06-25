@@ -1015,6 +1015,12 @@ webglCanvas.addEventListener('touchend', e => {
   swipeArmed = false;
 }, { passive: false });
 
+// desktop click = a tap (drives all the menu/art screens; gameplay uses arrow keys)
+webglCanvas.addEventListener('mousedown', e => {
+  initAudio(); resumeAudio();
+  if (state !== 'PLAYING') handleInput(e.clientX, e.clientY, 0, 0);
+});
+
 window.addEventListener('keydown', e => {
   if (e.key === 'ArrowLeft')  handleInput(0, 0, -80, 0);
   if (e.key === 'ArrowRight') handleInput(0, 0,  80, 0);
@@ -1022,14 +1028,28 @@ window.addEventListener('keydown', e => {
 });
 
 function handleInput(tx, ty, dx, dy) {
-  if (state === 'SPLASH')   { startGame(); return; }
+  if (state === 'SPLASH') {
+    const b = titleButtons();
+    if (pointInRect(tx, ty, b.play)) startGame();
+    else if (pointInRect(tx, ty, b.draw)) goArt();
+    return;
+  }
+  if (state === 'ART') {
+    if (artFlashing) { artFlashing = false; }            // lock the flashing pose
+    else {
+      const b = artButtons();
+      if (pointInRect(tx, ty, b.shuffle)) { artFlashing = true; artFlashT = 0; }
+      else if (pointInRect(tx, ty, b.back)) goTitle();
+    }
+    return;
+  }
   if (state === 'DEAD' && hero.deadT > 0.7) {
     if (isHighScore(Math.floor(score))) goInitials();   // earned a spot → enter initials
     else goScores();                                     // otherwise just view the board
     return;
   }
   if (state === 'INITIALS') { handleInitialsInput(tx, ty, dx, dy); return; }
-  if (state === 'SCORES')   { if (scoresAnimT > 0.5) startGame(); return; }   // let the reveal play
+  if (state === 'SCORES')   { if (scoresAnimT > 0.5) goTitle(); return; }   // back to the menu hub
   if (state !== 'PLAYING' || hero.dead) return;
   if (Math.abs(dx) > 30) doSwipe(dx < 0 ? 'left' : 'right');
 }
@@ -1222,72 +1242,190 @@ function drawHUD() {
   uiCtx.fillStyle = '#ffd23f'; uiCtx.fillText(`${coinCount}`, 74, cyCoin + 9);
 }
 
+// ════════ Spider-hero pose art (original, comic-filled) ════════
+function _limb(c, ax, ay, bx, by, w, fill) {
+  c.lineCap = 'round';
+  c.strokeStyle = '#0a0a0a'; c.lineWidth = w + 6;
+  c.beginPath(); c.moveTo(ax, ay); c.lineTo(bx, by); c.stroke();
+  c.strokeStyle = fill; c.lineWidth = w;
+  c.beginPath(); c.moveTo(ax, ay); c.lineTo(bx, by); c.stroke();
+}
+function _blob(c, x, y, r, fill) {
+  c.beginPath(); c.arc(x, y, r, 0, Math.PI * 2);
+  c.fillStyle = fill; c.fill();
+  c.lineWidth = Math.max(3, r * 0.5); c.strokeStyle = '#0a0a0a'; c.stroke();
+}
+function _mask(c, x, y, r) {
+  c.save(); c.translate(x, y);
+  c.beginPath(); c.arc(0, 0, r, 0, Math.PI * 2);
+  c.fillStyle = '#d12626'; c.fill();
+  c.lineWidth = Math.max(3, r * 0.16); c.strokeStyle = '#0a0a0a'; c.stroke();
+  c.strokeStyle = 'rgba(0,0,0,0.25)'; c.lineWidth = Math.max(1, r * 0.05);
+  c.beginPath(); c.moveTo(0, -r); c.lineTo(0, r); c.stroke();
+  c.beginPath(); c.arc(0, 0, r * 0.6, 0.15 * Math.PI, 0.85 * Math.PI); c.stroke();
+  for (const s of [-1, 1]) {                         // white spider eyes
+    c.save(); c.translate(s * r * 0.4, -r * 0.05); c.rotate(s * 0.5);
+    c.beginPath(); c.ellipse(0, 0, r * 0.44, r * 0.26, 0, 0, Math.PI * 2);
+    c.fillStyle = '#fff'; c.fill();
+    c.lineWidth = Math.max(2, r * 0.1); c.strokeStyle = '#0a0a0a'; c.stroke();
+    c.restore();
+  }
+  c.restore();
+}
+function drawSpiderPose(c, cx, cy, s, P) {
+  const X = j => cx + j[0] * s, Y = j => cy + j[1] * s;
+  const RED = '#d12626', BLUE = '#1d49b8', GLOVE = '#9c1414';
+  const armW = s * 0.16, legW = s * 0.2, torsoW = s * 0.42;
+  _limb(c, X(P.hipL), Y(P.hipL), X(P.kneeL), Y(P.kneeL), legW, BLUE);
+  _limb(c, X(P.kneeL), Y(P.kneeL), X(P.footL), Y(P.footL), legW * 0.9, BLUE);
+  _limb(c, X(P.hipR), Y(P.hipR), X(P.kneeR), Y(P.kneeR), legW, BLUE);
+  _limb(c, X(P.kneeR), Y(P.kneeR), X(P.footR), Y(P.footR), legW * 0.9, BLUE);
+  _blob(c, X(P.footL), Y(P.footL), s * 0.13, GLOVE);
+  _blob(c, X(P.footR), Y(P.footR), s * 0.13, GLOVE);
+  _limb(c, X(P.chest), Y(P.chest), X(P.hip), Y(P.hip), torsoW, RED);
+  _limb(c, X(P.shL), Y(P.shL), X(P.elL), Y(P.elL), armW, RED);
+  _limb(c, X(P.elL), Y(P.elL), X(P.haL), Y(P.haL), armW * 0.9, RED);
+  _limb(c, X(P.shR), Y(P.shR), X(P.elR), Y(P.elR), armW, RED);
+  _limb(c, X(P.elR), Y(P.elR), X(P.haR), Y(P.haR), armW * 0.9, RED);
+  _blob(c, X(P.haL), Y(P.haL), s * 0.1, GLOVE);
+  _blob(c, X(P.haR), Y(P.haR), s * 0.1, GLOVE);
+  const mx = cx + ((P.chest[0] + P.hip[0]) / 2) * s;
+  const my = cy + ((P.chest[1] + P.hip[1]) / 2) * s;
+  c.fillStyle = '#0a0a0a';
+  c.beginPath(); c.ellipse(mx, my, s * 0.05, s * 0.1, 0, 0, Math.PI * 2); c.fill();
+  _mask(c, X(P.head), Y(P.head), s * 0.2);
+}
+const POSES = [
+  { name:'SWING', head:[0,-0.75], chest:[0,-0.4], hip:[0,0.2], shL:[-0.2,-0.45], shR:[0.2,-0.45], elL:[-0.28,-0.8], elR:[0.28,-0.8], haL:[-0.12,-1.15], haR:[0.12,-1.15], hipL:[-0.13,0.2], hipR:[0.13,0.2], kneeL:[-0.28,0.55], kneeR:[0.12,0.6], footL:[-0.18,0.9], footR:[0.34,0.82] },
+  { name:'CROUCH', head:[0,-0.5], chest:[0,-0.22], hip:[0,0.25], shL:[-0.24,-0.22], shR:[0.24,-0.22], elL:[-0.45,0.0], elR:[0.42,-0.12], haL:[-0.52,0.5], haR:[0.52,-0.4], hipL:[-0.2,0.25], hipR:[0.2,0.25], kneeL:[-0.5,0.42], kneeR:[0.5,0.42], footL:[-0.4,0.72], footR:[0.4,0.72] },
+  { name:'WEB-SHOOT', head:[0.02,-0.82], chest:[-0.04,-0.48], hip:[0.04,0.12], shL:[-0.24,-0.48], shR:[0.2,-0.52], elL:[-0.22,-0.18], elR:[0.46,-0.74], haL:[-0.1,0.06], haR:[0.72,-1.02], hipL:[-0.1,0.12], hipR:[0.18,0.12], kneeL:[-0.2,0.5], kneeR:[0.26,0.5], footL:[-0.26,0.94], footR:[0.32,0.9] },
+  { name:'LEAP', head:[0,-0.78], chest:[0,-0.44], hip:[0,0.16], shL:[-0.25,-0.48], shR:[0.25,-0.48], elL:[-0.5,-0.68], elR:[0.5,-0.68], haL:[-0.76,-0.92], haR:[0.76,-0.92], hipL:[-0.18,0.16], hipR:[0.18,0.16], kneeL:[-0.45,0.45], kneeR:[0.45,0.45], footL:[-0.72,0.74], footR:[0.72,0.74] },
+  { name:'RUN', head:[0.05,-0.84], chest:[0,-0.5], hip:[-0.04,0.12], shL:[-0.2,-0.5], shR:[0.2,-0.5], elL:[-0.4,-0.34], elR:[0.36,-0.3], haL:[-0.46,-0.04], haR:[0.46,-0.5], hipL:[-0.12,0.12], hipR:[0.12,0.12], kneeL:[-0.36,0.42], kneeR:[0.3,0.46], footL:[-0.52,0.6], footR:[0.06,0.82] },
+  { name:'THWIP!', head:[0,-0.84], chest:[0,-0.5], hip:[0,0.12], shL:[-0.22,-0.5], shR:[0.22,-0.5], elL:[-0.34,-0.72], elR:[0.34,-0.72], haL:[-0.42,-1.0], haR:[0.42,-1.0], hipL:[-0.15,0.12], hipR:[0.15,0.12], kneeL:[-0.18,0.5], kneeR:[0.18,0.5], footL:[-0.2,0.95], footR:[0.2,0.95] },
+  { name:'HERO', head:[0,-0.9], chest:[0,-0.55], hip:[0,0.1], shL:[-0.24,-0.55], shR:[0.24,-0.55], elL:[-0.38,-0.28], elR:[0.38,-0.28], haL:[-0.28,0.0], haR:[0.28,0.0], hipL:[-0.16,0.1], hipR:[0.16,0.1], kneeL:[-0.2,0.52], kneeR:[0.2,0.52], footL:[-0.26,0.96], footR:[0.26,0.96] },
+];
+
+// ════════ Menu helpers + art-generator state ════════
+let artFlashing = true, artIndex = 0, artFlashT = 0;
+function goArt()   { state = 'ART'; artFlashing = true; artFlashT = 0; artIndex = 0; }
+function goTitle() { state = 'SPLASH'; }
+
+function pointInRect(px, py, r) { return px >= r.x && px <= r.x + r.w && py >= r.y && py <= r.y + r.h; }
+function drawButton(r, label, fill) {
+  uiCtx.save();
+  uiCtx.fillStyle = fill;
+  roundRect(r.x, r.y, r.w, r.h, 14); uiCtx.fill();
+  uiCtx.lineWidth = 5; uiCtx.strokeStyle = '#0a0a0a'; uiCtx.stroke();
+  uiCtx.textAlign = 'center';
+  uiCtx.font = `bold ${Math.min(34, r.h * 0.5)}px "Bangers", "Arial Black", Arial`;
+  uiCtx.lineWidth = 4; uiCtx.strokeStyle = '#0a0a0a';
+  uiCtx.strokeText(label, r.x + r.w / 2, r.y + r.h * 0.66);
+  uiCtx.fillStyle = '#fff';
+  uiCtx.fillText(label, r.x + r.w / 2, r.y + r.h * 0.66);
+  uiCtx.restore();
+}
+function titleButtons() {
+  const bw = Math.min(320, W * 0.62), bh = Math.min(76, H * 0.1), cx = W / 2, y0 = H * 0.64;
+  return { play: { x: cx - bw / 2, y: y0, w: bw, h: bh },
+           draw: { x: cx - bw / 2, y: y0 + bh + 20, w: bw, h: bh } };
+}
+function artButtons() {
+  const bw = Math.min(180, W * 0.4), bh = Math.min(64, H * 0.09), cx = W / 2, y0 = H * 0.86;
+  return { shuffle: { x: cx - bw - 12, y: y0, w: bw, h: bh },
+           back:    { x: cx + 12,     y: y0, w: bw, h: bh } };
+}
+
 function drawSplashUI() {
   const cx = W / 2;
-
+  uiCtx.fillStyle = 'rgba(18,14,34,0.80)'; uiCtx.fillRect(0, 0, W, H);   // distinct menu backdrop
+  drawComicTexture(0.55);
   uiCtx.strokeStyle = '#000'; uiCtx.lineWidth = 4;
-  uiCtx.strokeRect(W * 0.04, H * 0.04, W * 0.92, H * 0.92);
+  uiCtx.strokeRect(W * 0.04, H * 0.03, W * 0.92, H * 0.94);
 
   uiCtx.save();
-  uiCtx.translate(cx, H * 0.30); uiCtx.rotate(frameN * 0.004);
+  uiCtx.translate(cx, H * 0.26); uiCtx.rotate(frameN * 0.004);
   for (let i = 0; i < 24; i++) {
     const a = (i / 24) * Math.PI * 2;
-    uiCtx.fillStyle = i % 2 ? 'rgba(255,224,0,0.20)' : 'rgba(255,140,80,0.20)';
-    const r1 = 30, r2 = 220;
-    uiCtx.beginPath();
-    uiCtx.moveTo(0, 0);
-    uiCtx.lineTo(Math.cos(a) * r1, Math.sin(a) * r1);
-    uiCtx.lineTo(Math.cos(a + 0.13) * r2, Math.sin(a + 0.13) * r2);
-    uiCtx.lineTo(Math.cos(a + 0.26) * r1, Math.sin(a + 0.26) * r1);
+    uiCtx.fillStyle = i % 2 ? 'rgba(255,224,0,0.22)' : 'rgba(255,120,60,0.22)';
+    uiCtx.beginPath(); uiCtx.moveTo(0, 0);
+    uiCtx.lineTo(Math.cos(a) * 30, Math.sin(a) * 30);
+    uiCtx.lineTo(Math.cos(a + 0.13) * 210, Math.sin(a + 0.13) * 210);
+    uiCtx.lineTo(Math.cos(a + 0.26) * 30, Math.sin(a + 0.26) * 30);
     uiCtx.closePath(); uiCtx.fill();
   }
   uiCtx.restore();
 
   uiCtx.textAlign = 'center';
-  uiCtx.font = `bold ${Math.min(46, W * 0.075)}px "Bangers", "Arial Black", Arial`;
+  uiCtx.font = `bold ${Math.min(44, W * 0.072)}px "Bangers", "Arial Black", Arial`;
   uiCtx.strokeStyle = '#000'; uiCtx.lineWidth = 5;
-  uiCtx.strokeText('HAPPY BIRTHDAY', cx, H * 0.15);
-  uiCtx.fillStyle = '#ffe000'; uiCtx.fillText('HAPPY BIRTHDAY', cx, H * 0.15);
+  uiCtx.strokeText('HAPPY BIRTHDAY', cx, H * 0.12);
+  uiCtx.fillStyle = '#ffe000'; uiCtx.fillText('HAPPY BIRTHDAY', cx, H * 0.12);
 
-  const bSize = Math.min(110, W * 0.20);
-  uiCtx.font = `bold ${bSize}px "Bangers", "Arial Black", Arial`;
-  uiCtx.lineWidth = 10;
-  uiCtx.fillStyle = '#660000';
-  uiCtx.fillText('BRONX!', cx + 6, H * 0.30 + 6);
-  uiCtx.strokeStyle = '#000'; uiCtx.strokeText('BRONX!', cx, H * 0.30);
-  uiCtx.fillStyle = '#ff2222'; uiCtx.fillText('BRONX!', cx, H * 0.30);
+  uiCtx.font = `bold ${Math.min(96, W * 0.18)}px "Bangers", "Arial Black", Arial`;
+  uiCtx.lineWidth = 10; uiCtx.strokeStyle = '#000';
+  uiCtx.strokeText('BRONX!', cx, H * 0.24);
+  uiCtx.fillStyle = '#ff2222'; uiCtx.fillText('BRONX!', cx, H * 0.24);
 
   uiCtx.save();
-  uiCtx.translate(cx + W * 0.28, H * 0.26);
-  uiCtx.rotate(-0.18);
+  uiCtx.translate(cx + W * 0.30, H * 0.20); uiCtx.rotate(-0.18);
   uiCtx.fillStyle = '#ffe000'; uiCtx.strokeStyle = '#000'; uiCtx.lineWidth = 4;
   uiCtx.beginPath();
-  for (let i = 0; i < 16; i++) {
-    const a = (i / 16) * Math.PI * 2;
-    const r = i % 2 === 0 ? 62 : 44;
-    if (i === 0) uiCtx.moveTo(Math.cos(a) * r, Math.sin(a) * r);
-    else uiCtx.lineTo(Math.cos(a) * r, Math.sin(a) * r);
-  }
+  for (let i = 0; i < 16; i++) { const a = (i / 16) * Math.PI * 2, r = i % 2 === 0 ? 56 : 40; if (i === 0) uiCtx.moveTo(Math.cos(a) * r, Math.sin(a) * r); else uiCtx.lineTo(Math.cos(a) * r, Math.sin(a) * r); }
   uiCtx.closePath(); uiCtx.fill(); uiCtx.stroke();
-  uiCtx.font = 'bold 22px "Bangers", "Arial Black", Arial'; uiCtx.fillStyle = '#000';
-  uiCtx.textAlign = 'center';
-  uiCtx.fillText('TURNING', 0, -8);
-  uiCtx.font = 'bold 36px "Bangers", "Arial Black", Arial';
-  uiCtx.fillText('12!', 0, 22);
+  uiCtx.fillStyle = '#000'; uiCtx.font = 'bold 20px "Bangers", "Arial Black", Arial';
+  uiCtx.fillText('TURNING', 0, -6); uiCtx.font = 'bold 32px "Bangers", "Arial Black", Arial'; uiCtx.fillText('12!', 0, 22);
   uiCtx.restore();
 
-  uiCtx.font = `bold ${Math.min(42, W * 0.08)}px "Bangers", "Arial Black", Arial`;
-  uiCtx.lineWidth = 5; uiCtx.strokeStyle = '#000';
-  uiCtx.textAlign = 'center';
-  uiCtx.strokeText('WEB SWING DASH', cx, H * 0.92);
-  uiCtx.fillStyle = '#ffffff'; uiCtx.fillText('WEB SWING DASH', cx, H * 0.92);
+  drawSpiderPose(uiCtx, cx, H * 0.46, Math.min(W * 0.12, 78), POSES[5]);   // mascot
 
-  uiCtx.globalAlpha = 0.65 + 0.35 * Math.sin(frameN * 0.09);
-  uiCtx.font = `bold ${Math.min(22, W * 0.045)}px Arial`;
-  uiCtx.lineWidth = 3;
-  uiCtx.strokeText('TAP TO START SWINGING!', cx, H * 0.98);
-  uiCtx.fillStyle = '#ffe000'; uiCtx.fillText('TAP TO START SWINGING!', cx, H * 0.98);
-  uiCtx.globalAlpha = 1;
+  uiCtx.textAlign = 'center';
+  uiCtx.font = `bold ${Math.min(30, W * 0.055)}px "Bangers", "Arial Black", Arial`;
+  uiCtx.lineWidth = 4; uiCtx.strokeStyle = '#000';
+  uiCtx.strokeText('WEB SWING DASH', cx, H * 0.585);
+  uiCtx.fillStyle = '#fff'; uiCtx.fillText('WEB SWING DASH', cx, H * 0.585);
+
+  const b = titleButtons();
+  drawButton(b.play, 'PLAY', '#e23b3b');
+  drawButton(b.draw, 'DRAW!', '#3b7bff');
+}
+
+function drawArtUI() {
+  uiCtx.fillStyle = 'rgba(20,16,40,0.84)'; uiCtx.fillRect(0, 0, W, H);
+  drawComicTexture(0.5);
+  const cx = W / 2;
+
+  uiCtx.textAlign = 'center';
+  uiCtx.font = `bold ${Math.min(40, W * 0.07)}px "Bangers", "Arial Black", Arial`;
+  uiCtx.lineWidth = 6; uiCtx.strokeStyle = '#000';
+  const title = artFlashing ? 'TAP TO STOP!' : 'DRAW THIS!';
+  uiCtx.strokeText(title, cx, H * 0.12);
+  uiCtx.fillStyle = artFlashing ? '#ffe000' : '#3bff8c';
+  uiCtx.fillText(title, cx, H * 0.12);
+
+  const pw = Math.min(W * 0.8, 460), ph = Math.min(H * 0.5, 460);
+  const px = cx - pw / 2, py = H * 0.17;
+  uiCtx.fillStyle = '#f6f0e2';
+  roundRect(px, py, pw, ph, 18); uiCtx.fill();
+  uiCtx.lineWidth = 8; uiCtx.strokeStyle = '#0a0a0a'; uiCtx.stroke();
+
+  drawSpiderPose(uiCtx, px + pw / 2, py + ph * 0.48, Math.min(pw, ph) * 0.32, POSES[artIndex]);
+
+  uiCtx.font = `bold ${Math.min(24, W * 0.045)}px "Bangers", "Arial Black", Arial`;
+  uiCtx.fillStyle = '#0a0a0a'; uiCtx.textAlign = 'center';
+  uiCtx.fillText(POSES[artIndex].name, px + pw / 2, py + ph - 16);
+
+  if (artFlashing) {
+    uiCtx.globalAlpha = 0.65 + 0.35 * Math.sin(frameN * 0.2);
+    uiCtx.font = `bold ${Math.min(22, W * 0.045)}px Arial`;
+    uiCtx.fillStyle = '#fff'; uiCtx.strokeStyle = '#000'; uiCtx.lineWidth = 3;
+    uiCtx.strokeText('tap anywhere to lock a pose', cx, py + ph + 44);
+    uiCtx.fillText('tap anywhere to lock a pose', cx, py + ph + 44);
+    uiCtx.globalAlpha = 1;
+  } else {
+    const b = artButtons();
+    drawButton(b.shuffle, 'SHUFFLE', '#3b7bff');
+    drawButton(b.back, 'BACK', '#e23b3b');
+  }
 }
 
 function drawGameOverUI() {
@@ -1686,10 +1824,14 @@ function loop(ts) {
     updateFloaters(dt);
     speed *= 0.92;
     recycleWorld();
-  } else if (state === 'SPLASH' || state === 'INITIALS' || state === 'SCORES') {
+  } else if (state === 'SPLASH' || state === 'INITIALS' || state === 'SCORES' || state === 'ART') {
     speed = 6;
     recycleWorld();
     if (state === 'SCORES') scoresAnimT += dt;   // drive the board fade-in
+    if (state === 'ART' && artFlashing) {        // slot-machine pose cycling
+      artFlashT += dt;
+      if (artFlashT > 0.07) { artFlashT = 0; artIndex = (artIndex + 1) % POSES.length; }
+    }
   }
 
   updateCamera(dt);
@@ -1712,6 +1854,8 @@ function loop(ts) {
     drawInitialsUI();
   } else if (state === 'SCORES') {
     drawScoresUI();
+  } else if (state === 'ART') {
+    drawArtUI();
   }
 
   // TEMP build marker — proves you're seeing the latest code. Remove later.
@@ -1719,9 +1863,9 @@ function loop(ts) {
   uiCtx.font = 'bold 18px monospace';
   uiCtx.textAlign = 'right';
   uiCtx.lineWidth = 4; uiCtx.strokeStyle = '#000';
-  uiCtx.strokeText('BUILD 20 ✅', W - 12, H - 14);
+  uiCtx.strokeText('BUILD 21 ✅', W - 12, H - 14);
   uiCtx.fillStyle = '#00ff88';
-  uiCtx.fillText('BUILD 20 ✅', W - 12, H - 14);
+  uiCtx.fillText('BUILD 21 ✅', W - 12, H - 14);
   uiCtx.restore();
 
   requestAnimationFrame(loop);
