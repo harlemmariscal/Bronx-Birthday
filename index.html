@@ -182,7 +182,7 @@ function getBuildingTexture(seed) {
 // ── Street ───────────────────────────────────────────────────
 function buildStreet() {
   const streetMat = new THREE.MeshStandardMaterial({ color: 0x3a3a44, roughness: 0.95 });
-  const street = new THREE.Mesh(new THREE.PlaneGeometry(STREET_W, 4000), streetMat);
+  const street = new THREE.Mesh(new THREE.PlaneGeometry(STREET_W, 4200), streetMat);
   street.rotation.x = -Math.PI / 2;
   street.position.z = -2000;
   street.position.y = 0;
@@ -190,12 +190,12 @@ function buildStreet() {
 
   const sidewalkMat = new THREE.MeshStandardMaterial({ color: 0x7a7882, roughness: 0.9 });
   for (const sx of [-1, 1]) {
-    const sw = new THREE.Mesh(new THREE.PlaneGeometry(8, 4000), sidewalkMat);
+    const sw = new THREE.Mesh(new THREE.PlaneGeometry(8, 4200), sidewalkMat);
     sw.rotation.x = -Math.PI / 2;
     sw.position.set(sx * (STREET_W/2 + 4), 0.05, -2000);
     scene.add(sw);
     const curb = new THREE.Mesh(
-      new THREE.BoxGeometry(0.3, 0.3, 4000),
+      new THREE.BoxGeometry(0.3, 0.3, 4200),
       new THREE.MeshStandardMaterial({ color: 0x4a4854 })
     );
     curb.position.set(sx * (STREET_W/2 + 0.15), 0.15, -2000);
@@ -1339,9 +1339,8 @@ function noiseBurst(dur, vol, cutoff) {
   src.start(t); src.stop(t + dur);
 }
 
-function sfxThwip() {              // web shot on each swing — soft & subtle
-  blip(600, 1350, 0.08, 'sine', 0.055);
-  blip(1050, 1400, 0.04, 'triangle', 0.25);
+function sfxThwip() {              // web shot on each swing — very, very subtle
+  blip(700, 1250, 0.06, 'sine', 0.02);
 }
 function sfxCrash() {              // wipeout
   noiseBurst(0.4, 0.5, 2400);
