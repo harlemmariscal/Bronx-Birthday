@@ -481,22 +481,19 @@ function makeSpiderHero() {
   return g;
 }
 
-function makeWeb() {
-  const points = [
-    new THREE.Vector3(0, 3.4, 0),
-    new THREE.Vector3(0, 200, -50),
-  ];
-  webGeom = new THREE.BufferGeometry().setFromPoints(points);
-  webMat = new THREE.LineBasicMaterial({ color: 0xfffacd, linewidth: 3 });
-  webLine = new THREE.Line(webGeom, webMat);
-  scene.add(webLine);
+// reusable vectors so we don't allocate every frame
+const _webStart = new THREE.Vector3();
+const _webEnd   = new THREE.Vector3();
+const _webMid   = new THREE.Vector3();
+const _webDir   = new THREE.Vector3();
+const _UP       = new THREE.Vector3(0, 1, 0);
 
-  const cylGeom = new THREE.CylinderGeometry(0.04, 0.04, 80, 6);
-  const cylMat = new THREE.MeshBasicMaterial({ color: 0xfff5d0 });
-  const cyl = new THREE.Mesh(cylGeom, cylMat);
-  cyl.position.set(0, 40, 0);
-  scene.add(cyl);
-  webLine.userData.cyl = cyl;
+function makeWeb() {
+  // a unit-height strand we stretch + aim each frame (hand -> anchor ahead)
+  const cylGeom = new THREE.CylinderGeometry(0.05, 0.05, 1, 6);
+  const cylMat  = new THREE.MeshBasicMaterial({ color: 0xfff5d0 });
+  webLine = new THREE.Mesh(cylGeom, cylMat);
+  scene.add(webLine);
 }
 
 // ── Obstacles in lanes ───────────────────────────────────────
@@ -731,10 +728,20 @@ function updateCamera(dt) {
   camera.lookAt(lookTarget);
   camera.rotateZ(camTilt);
 
-  if (webLine && webLine.userData.cyl) {
-    const cyl = webLine.userData.cyl;
-    cyl.position.set(camCurrentX, 40 + heroGroup.position.y, 0);
-    cyl.rotation.z = camTilt * 0.5;
+  if (webLine) {
+    const handX = camCurrentX + 0.6;                 // from his right hand
+    let aim = Math.sin(frameN * 0.04) * 6;           // gentle swing sway
+    if (hero.swinging) {                             // lean toward the lane he's swinging to
+      const dir = hero.swingTo > hero.swingFrom ? 1 : -1;
+      aim += dir * 6 * Math.sin(Math.PI * hero.swingT);
+    }
+    _webStart.set(handX, 3.4 + heroGroup.position.y, 0);
+    _webEnd.set(camCurrentX + aim, 52, -65);         // anchor high and forward
+    _webMid.copy(_webStart).add(_webEnd).multiplyScalar(0.5);
+    webLine.position.copy(_webMid);
+    webLine.scale.set(1, _webStart.distanceTo(_webEnd), 1);
+    _webDir.copy(_webEnd).sub(_webStart).normalize();
+    webLine.quaternion.setFromUnitVectors(_UP, _webDir);
   }
 }
 
@@ -1439,9 +1446,9 @@ function loop(ts) {
   uiCtx.font = 'bold 18px monospace';
   uiCtx.textAlign = 'right';
   uiCtx.lineWidth = 4; uiCtx.strokeStyle = '#000';
-  uiCtx.strokeText('BUILD 10 ✅', W - 12, H - 14);
+  uiCtx.strokeText('BUILD 11 ✅', W - 12, H - 14);
   uiCtx.fillStyle = '#00ff88';
-  uiCtx.fillText('BUILD 10 ✅', W - 12, H - 14);
+  uiCtx.fillText('BUILD 11 ✅', W - 12, H - 14);
   uiCtx.restore();
 
   requestAnimationFrame(loop);
